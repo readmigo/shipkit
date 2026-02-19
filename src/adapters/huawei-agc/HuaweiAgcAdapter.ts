@@ -75,9 +75,8 @@ export class HuaweiAgcAdapter extends AbstractStoreAdapter {
   }
 
   private getClientId(): string {
-    // In a real implementation, this would come from the credentials
-    // For now, return a placeholder that the AuthManager would provide
-    return '';
+    const config = this.authManager.getConfig('huawei_agc');
+    return config['clientId'] ?? config['client_id'] ?? '';
   }
 
   // ─── Upload ────────────────────────────────────────────────────────

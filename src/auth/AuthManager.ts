@@ -228,6 +228,13 @@ export class AuthManager {
   // ─── Helpers ─────────────────────────────────────────────────────
 
   /**
+   * Get config values for a store (safe read-only access for adapters)
+   */
+  getConfig(storeId: string): Record<string, string> {
+    return this.credentials.get(storeId)?.config ?? {};
+  }
+
+  /**
    * Ensure the credentials directory exists
    */
   async ensureCredentialsDir(): Promise<string> {

@@ -166,7 +166,8 @@ export class AppleAscAdapter extends AbstractStoreAdapter {
         // Patch existing localization
         const patchBody: Record<string, string> = {};
         if (params.fullDescription) patchBody.description = params.fullDescription;
-        if (params.title) patchBody.whatsNew = params.title; // ASC uses whatsNew differently
+        if (params.title) patchBody.name = params.title;
+        if (params.shortDescription) patchBody.promotionalText = params.shortDescription;
 
         await this.client.patch(
           `/appStoreVersionLocalizations/${localization.id}`,

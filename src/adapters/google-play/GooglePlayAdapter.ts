@@ -134,13 +134,13 @@ export class GooglePlayAdapter extends AbstractStoreAdapter {
 
       const release: Record<string, unknown> = {
         name: params.versionName,
-        status: params.rolloutPercentage != null && params.rolloutPercentage < 100
+        status: params.rolloutPercentage != null && params.rolloutPercentage < 1.0
           ? 'inProgress'
           : 'completed',
       };
 
-      if (params.rolloutPercentage != null && params.rolloutPercentage < 100) {
-        release.userFraction = params.rolloutPercentage / 100;
+      if (params.rolloutPercentage != null && params.rolloutPercentage < 1.0) {
+        release.userFraction = params.rolloutPercentage;
       }
 
       if (params.releaseNotes) {
