@@ -65,3 +65,9 @@ export async function startWebServer(port?: number): Promise<void> {
 
   console.log(`ShipKit Web Dashboard running at http://localhost:${resolvedPort}`);
 }
+
+// Auto-start when executed directly
+const isMain = process.argv[1]?.endsWith('web/server.js') || process.argv[1]?.endsWith('web/server.ts');
+if (isMain) {
+  startWebServer();
+}

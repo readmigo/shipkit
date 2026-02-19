@@ -88,7 +88,7 @@ describe('Web Dashboard Server', () => {
     it('should return status ok', async () => {
       const res = await app.request('/api/health');
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.status).toBe('ok');
       expect(body.version).toBe('0.1.0');
       expect(body.timestamp).toBeDefined();
@@ -99,13 +99,13 @@ describe('Web Dashboard Server', () => {
     it('should return all 8 stores', async () => {
       const res = await app.request('/api/stores');
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.stores).toHaveLength(8);
     });
 
     it('should include store properties', async () => {
       const res = await app.request('/api/stores');
-      const body = await res.json();
+      const body = await res.json() as any;
       const gp = body.stores.find((s: any) => s.storeId === 'google_play');
       expect(gp).toBeDefined();
       expect(gp.storeName).toBe('Google Play');
@@ -138,7 +138,7 @@ describe('Web Dashboard Server', () => {
     it('should return builds array', async () => {
       const res = await app.request('/api/builds');
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.builds).toBeDefined();
       expect(Array.isArray(body.builds)).toBe(true);
     });
@@ -167,7 +167,7 @@ describe('Web Dashboard Server', () => {
     it('should return jobs array', async () => {
       const res = await app.request('/api/jobs');
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.jobs).toBeDefined();
       expect(Array.isArray(body.jobs)).toBe(true);
     });
@@ -213,7 +213,7 @@ describe('Web Dashboard Server', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = await res.json() as any;
       expect(body.app_id).toBe('com.test');
       expect(body.overall_status).toBeDefined();
       expect(body.checks).toBeDefined();
@@ -229,7 +229,7 @@ describe('Web Dashboard Server', () => {
           store_ids: ['google_play'],
         }),
       });
-      const body = await res.json();
+      const body = await res.json() as any;
       const privacyCheck = body.checks.find((c: any) => c.category === 'privacy_policy');
       expect(privacyCheck).toBeDefined();
       expect(privacyCheck.status).toBe('fail');
@@ -245,7 +245,7 @@ describe('Web Dashboard Server', () => {
           metadata: { privacy_policy_url: 'https://example.com/privacy' },
         }),
       });
-      const body = await res.json();
+      const body = await res.json() as any;
       const icpCheck = body.checks.find((c: any) => c.category === 'icp_filing');
       expect(icpCheck).toBeDefined();
       expect(icpCheck.status).toBe('warning');
