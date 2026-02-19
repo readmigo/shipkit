@@ -233,6 +233,17 @@ program
     await startMcpServer();
   });
 
+// ─── web command ────────────────────────────────────────────────────
+
+program
+  .command('web')
+  .description('Start the web dashboard')
+  .option('--port <port>', 'Port number', '3456')
+  .action(async (opts: { port: string }) => {
+    const { startWebServer } = await import('../web/server.js');
+    await startWebServer(parseInt(opts.port, 10));
+  });
+
 // ─── Parse and run ───────────────────────────────────────────────────
 
 program.parse();

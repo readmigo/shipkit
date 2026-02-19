@@ -1,0 +1,345 @@
+function app() {
+  return {
+    currentView: 'dashboard',
+    mobileSidebar: false,
+    stores: [],
+    builds: [],
+    jobs: [],
+    statusResults: [],
+    publishResults: [],
+    uploading: false,
+    publishing: false,
+    notification: null,
+    selectedFile: null,
+    dragover: false,
+    uploadForm: { appId: '', storeId: '', fileType: '' },
+    publishForm: { appId: '', buildId: '', storeIds: [], versionName: '', releaseNotes: '' },
+    statusAppId: '',
+    jobFilter: 'all',
+    configModal: { open: false, storeId: '', credentials: {} },
+    eventSource: null,
+    _jobInterval: null,
+
+    init() {
+      this.fetchStores();
+      this.fetchJobs();
+      this._jobInterval = setInterval(() => this.fetchJobs(), 10000);
+
+      this.$watch('currentView', (newView, oldView) => {
+        if (oldView === 'status' && this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+      });
+    },
+
+    destroy() {
+      if (this._jobInterval) clearInterval(this._jobInterval);
+      if (this.eventSource) this.eventSource.close();
+    },
+
+    // ==================== API Methods ====================
+
+    async fetchStores() {
+      try {
+        const res = await fetch('/api/stores');
+        if (!res.ok) throw new Error('Failed to fetch stores');
+        const data = await res.json();
+        this.stores = data.stores || [];
+      } catch (e) {
+        this.showNotification('error', 'Failed to load stores: ' + e.message);
+      }
+    },
+
+    async fetchBuilds(appId) {
+      try {
+        const params = new URLSearchParams();
+        if (appId) params.set('app_id', appId);
+        const res = await fetch('/api/builds?' + params.toString());
+        if (!res.ok) throw new Error('Failed to fetch builds');
+        const data = await res.json();
+        this.builds = data.builds || [];
+      } catch (e) {
+        this.showNotification('error', 'Failed to load builds: ' + e.message);
+      }
+    },
+
+    async fetchJobs() {
+      try {
+        const params = new URLSearchParams();
+        if (this.jobFilter !== 'all') params.set('status', this.jobFilter);
+        const res = await fetch('/api/jobs?' + params.toString());
+        if (!res.ok) throw new Error('Failed to fetch jobs');
+        const data = await res.json();
+        this.jobs = data.jobs || [];
+      } catch (e) {
+        // Silently fail on auto-refresh, only show error on first load
+        if (this.jobs.length === 0) {
+          this.showNotification('error', 'Failed to load jobs: ' + e.message);
+        }
+      }
+    },
+
+    async uploadBuild(event) {
+      if (!this.selectedFile || !this.uploadForm.appId || !this.uploadForm.storeId) return;
+
+      this.uploading = true;
+      try {
+        const formData = new FormData();
+        formData.append('file', this.selectedFile);
+        formData.append('app_id', this.uploadForm.appId);
+        formData.append('store_id', this.uploadForm.storeId);
+        if (this.uploadForm.fileType) {
+          formData.append('file_type', this.uploadForm.fileType);
+        }
+
+        const res = await fetch('/api/builds/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'Upload failed' }));
+          throw new Error(err.message || 'Upload failed');
+        }
+
+        const data = await res.json();
+        this.showNotification('success', 'Build uploaded successfully! ID: ' + data.build_id.slice(0, 8));
+        this.selectedFile = null;
+        this.uploadForm = { appId: '', storeId: '', fileType: '' };
+        this.fetchBuilds();
+      } catch (e) {
+        this.showNotification('error', 'Upload failed: ' + e.message);
+      } finally {
+        this.uploading = false;
+      }
+    },
+
+    async publishToStores() {
+      if (!this.publishForm.buildId || this.publishForm.storeIds.length === 0) return;
+
+      this.publishing = true;
+      this.publishResults = [];
+      try {
+        const body = {
+          app_id: this.publishForm.appId,
+          build_id: this.publishForm.buildId,
+          store_ids: this.publishForm.storeIds,
+        };
+        if (this.publishForm.versionName) body.version_name = this.publishForm.versionName;
+        if (this.publishForm.releaseNotes) body.release_notes = this.publishForm.releaseNotes;
+
+        const res = await fetch('/api/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'Publish failed' }));
+          throw new Error(err.message || 'Publish failed');
+        }
+
+        const data = await res.json();
+        this.publishResults = data.results || [];
+
+        const succeeded = this.publishResults.filter(r => r.success).length;
+        const total = this.publishResults.length;
+        if (succeeded === total) {
+          this.showNotification('success', 'Published to all ' + total + ' store(s) successfully!');
+        } else {
+          this.showNotification('error', succeeded + '/' + total + ' stores published. Check results for details.');
+        }
+      } catch (e) {
+        this.showNotification('error', 'Publish failed: ' + e.message);
+      } finally {
+        this.publishing = false;
+      }
+    },
+
+    async checkStatus() {
+      if (!this.statusAppId) return;
+      try {
+        const res = await fetch('/api/status/' + encodeURIComponent(this.statusAppId));
+        if (!res.ok) throw new Error('Failed to check status');
+        const data = await res.json();
+        this.statusResults = data.statuses || [];
+        this.connectSSE();
+      } catch (e) {
+        this.showNotification('error', 'Status check failed: ' + e.message);
+      }
+    },
+
+    connectSSE() {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
+      if (!this.statusAppId) return;
+
+      this.eventSource = new EventSource('/api/status/stream/' + encodeURIComponent(this.statusAppId));
+
+      this.eventSource.addEventListener('status_change', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          const idx = this.statusResults.findIndex(s => s.storeId === data.storeId);
+          if (idx >= 0) {
+            this.statusResults[idx] = { ...this.statusResults[idx], ...data };
+          } else {
+            this.statusResults.push(data);
+          }
+        } catch (e) {
+          // Ignore malformed SSE data
+        }
+      });
+
+      this.eventSource.onerror = () => {
+        this.eventSource.close();
+        // Auto-reconnect after 5 seconds
+        setTimeout(() => {
+          if (this.currentView === 'status' && this.statusAppId) {
+            this.connectSSE();
+          }
+        }, 5000);
+      };
+    },
+
+    async configureStore() {
+      try {
+        const res = await fetch('/api/stores/' + encodeURIComponent(this.configModal.storeId) + '/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credentials: this.configModal.credentials }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'Configuration failed' }));
+          throw new Error(err.message || 'Configuration failed');
+        }
+
+        const data = await res.json();
+        this.showNotification('success', data.message || 'Store connected successfully!');
+        this.configModal.open = false;
+        this.fetchStores();
+      } catch (e) {
+        this.showNotification('error', 'Failed to configure store: ' + e.message);
+      }
+    },
+
+    async retryJob(jobId) {
+      try {
+        const res = await fetch('/api/jobs/' + encodeURIComponent(jobId) + '/retry', {
+          method: 'POST',
+        });
+        if (!res.ok) throw new Error('Retry failed');
+        this.showNotification('success', 'Job retry initiated');
+        this.fetchJobs();
+      } catch (e) {
+        this.showNotification('error', 'Retry failed: ' + e.message);
+      }
+    },
+
+    // ==================== UI Helpers ====================
+
+    openConfigModal(store) {
+      this.configModal = {
+        open: true,
+        storeId: store.storeId,
+        credentials: {},
+      };
+    },
+
+    handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.selectedFile = file;
+        this.autoDetectFileType(file.name);
+      }
+    },
+
+    handleDrop(event) {
+      this.dragover = false;
+      const file = event.dataTransfer.files[0];
+      if (file) {
+        this.selectedFile = file;
+        this.autoDetectFileType(file.name);
+      }
+    },
+
+    autoDetectFileType(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const typeMap = { apk: 'apk', aab: 'aab', ipa: 'ipa', zip: 'zip' };
+      this.uploadForm.fileType = typeMap[ext] || '';
+    },
+
+    filteredJobs() {
+      if (this.jobFilter === 'all') return this.jobs;
+      return this.jobs.filter(j => j.status === this.jobFilter);
+    },
+
+    showNotification(type, message) {
+      this.notification = { type, message };
+      setTimeout(() => {
+        this.notification = null;
+      }, 3000);
+    },
+
+    relativeTime(dateStr) {
+      if (!dateStr) return '—';
+      const now = Date.now();
+      const then = new Date(dateStr).getTime();
+      const diff = now - then;
+
+      if (diff < 0) return 'just now';
+
+      const seconds = Math.floor(diff / 1000);
+      if (seconds < 60) return seconds + 's ago';
+
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return minutes + ' min ago';
+
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + ' hour' + (hours > 1 ? 's' : '') + ' ago';
+
+      const days = Math.floor(hours / 24);
+      if (days < 30) return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+
+      const months = Math.floor(days / 30);
+      return months + ' month' + (months > 1 ? 's' : '') + ' ago';
+    },
+
+    getStatusColor(status) {
+      const colors = {
+        approved: 'bg-green-100 text-green-700',
+        live: 'bg-green-100 text-green-700',
+        in_review: 'bg-yellow-100 text-yellow-700',
+        pending_review: 'bg-yellow-100 text-yellow-700',
+        rejected: 'bg-red-100 text-red-700',
+        draft: 'bg-gray-100 text-gray-600',
+        not_found: 'bg-gray-100 text-gray-500',
+      };
+      return colors[status] || 'bg-gray-100 text-gray-600';
+    },
+
+    getJobStatusClass(status) {
+      const classes = {
+        completed: 'bg-green-100 text-green-700',
+        running: 'bg-blue-100 text-blue-700',
+        pending: 'bg-yellow-100 text-yellow-700',
+        failed: 'bg-red-100 text-red-700',
+      };
+      return classes[status] || 'bg-gray-100 text-gray-600';
+    },
+
+    formatFileSize(bytes) {
+      if (!bytes) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let i = 0;
+      let size = bytes;
+      while (size >= 1024 && i < units.length - 1) {
+        size /= 1024;
+        i++;
+      }
+      return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    },
+  };
+}

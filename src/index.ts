@@ -10,6 +10,7 @@ export { AdapterRegistry } from './adapters/AdapterRegistry.js';
 export { AuthManager } from './auth/AuthManager.js';
 export { JobQueue, globalQueue } from './queue/JobQueue.js';
 export type { Job, JobStatus } from './queue/JobQueue.js';
+export { startWebServer } from './web/server.js';
 
 // When executed directly, detect mode from args/env
 const isMainModule = process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('index.ts');
@@ -22,6 +23,8 @@ if (isMainModule) {
     import('./mcp/server.js').then(m => m.startMcpServer());
   } else if (mode === 'cli') {
     import('./cli/index.js');
+  } else if (mode === 'web') {
+    import('./web/server.js').then(m => m.startWebServer());
   } else {
     import('./mcp/server.js').then(m => m.startMcpServer());
   }

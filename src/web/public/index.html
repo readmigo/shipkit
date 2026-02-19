@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShipKit — App Publishing Dashboard</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style type="text/tailwindcss">
+    [x-cloak] { display: none !important; }
+    .sidebar-item { @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150; }
+    .sidebar-item:hover { @apply bg-gray-800 text-white; }
+    .sidebar-item.active { @apply bg-indigo-600 text-white; }
+    .badge { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; }
+    .card { @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6; }
+    .btn-primary { @apply inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
+    .btn-secondary { @apply inline-flex items-center justify-center px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors; }
+    .input { @apply block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500; }
+    .select { @apply block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500; }
+    .label { @apply block text-sm font-medium text-gray-700 mb-1; }
+    .table-header { @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider; }
+    .table-cell { @apply px-6 py-4 whitespace-nowrap text-sm; }
+    .drop-zone { @apply border-2 border-dashed border-gray-300 rounded-xl p-10 text-center cursor-pointer transition-colors duration-200; }
+    .drop-zone.dragover { @apply border-indigo-500 bg-indigo-50; }
+    .tab { @apply px-4 py-2 text-sm font-medium rounded-lg transition-colors; }
+    .tab.active { @apply bg-indigo-100 text-indigo-700; }
+    .tab:not(.active) { @apply text-gray-500 hover:text-gray-700 hover:bg-gray-100; }
+  </style>
+</head>
+<body x-data="app()" x-cloak class="bg-gray-50 min-h-screen">
+
+  <!-- Notification Toast -->
+  <div x-show="notification" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-2" class="fixed top-4 right-4 z-50 max-w-sm w-full">
+    <div :class="notification?.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'" class="rounded-lg border p-4 shadow-lg">
+      <div class="flex items-center gap-3">
+        <template x-if="notification?.type === 'success'">
+          <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </template>
+        <template x-if="notification?.type === 'error'">
+          <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </template>
+        <p class="text-sm font-medium" x-text="notification?.message"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex h-screen overflow-hidden">
+    <!-- Sidebar -->
+    <aside class="hidden lg:flex lg:flex-col lg:w-64 bg-gray-900">
+      <!-- Logo -->
+      <div class="flex items-center gap-3 px-6 py-5 border-b border-gray-800">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        </div>
+        <div>
+          <h1 class="text-white font-bold text-lg leading-tight">ShipKit</h1>
+          <p class="text-gray-500 text-xs">App Publishing</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <button @click="currentView = 'dashboard'" :class="currentView === 'dashboard' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Dashboard
+        </button>
+        <button @click="currentView = 'stores'" :class="currentView === 'stores' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+          Stores
+        </button>
+        <button @click="currentView = 'upload'" :class="currentView === 'upload' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          Upload
+        </button>
+        <button @click="currentView = 'publish'" :class="currentView === 'publish' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+          Publish
+        </button>
+        <button @click="currentView = 'status'" :class="currentView === 'status' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Status
+        </button>
+        <button @click="currentView = 'jobs'" :class="currentView === 'jobs' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+          Jobs
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="px-4 py-4 border-t border-gray-800">
+        <p class="text-gray-500 text-xs">ShipKit v0.1.0</p>
+      </div>
+    </aside>
+
+    <!-- Mobile sidebar overlay -->
+    <div x-show="mobileSidebar" @click="mobileSidebar = false" class="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" x-transition:enter="transition-opacity ease-linear duration-200" x-transition:leave="transition-opacity ease-linear duration-200"></div>
+
+    <!-- Mobile sidebar -->
+    <aside x-show="mobileSidebar" x-transition:enter="transition ease-in-out duration-200 transform" x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in-out duration-200 transform" x-transition:leave-start="translate-x-0" x-transition:leave-end="-translate-x-full" class="fixed inset-y-0 left-0 z-50 w-64 bg-gray-900 lg:hidden">
+      <div class="flex items-center justify-between px-6 py-5 border-b border-gray-800">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          </div>
+          <h1 class="text-white font-bold text-lg">ShipKit</h1>
+        </div>
+        <button @click="mobileSidebar = false" class="text-gray-400 hover:text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <nav class="px-3 py-4 space-y-1">
+        <button @click="currentView = 'dashboard'; mobileSidebar = false" :class="currentView === 'dashboard' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          Dashboard
+        </button>
+        <button @click="currentView = 'stores'; mobileSidebar = false" :class="currentView === 'stores' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+          Stores
+        </button>
+        <button @click="currentView = 'upload'; mobileSidebar = false" :class="currentView === 'upload' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          Upload
+        </button>
+        <button @click="currentView = 'publish'; mobileSidebar = false" :class="currentView === 'publish' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/></svg>
+          Publish
+        </button>
+        <button @click="currentView = 'status'; mobileSidebar = false" :class="currentView === 'status' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Status
+        </button>
+        <button @click="currentView = 'jobs'; mobileSidebar = false" :class="currentView === 'jobs' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+          Jobs
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Top Bar -->
+      <header class="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-4">
+          <button @click="mobileSidebar = true" class="lg:hidden text-gray-500 hover:text-gray-700">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <h2 class="text-lg font-semibold text-gray-900 capitalize" x-text="currentView"></h2>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="hidden sm:inline-flex badge bg-indigo-100 text-indigo-700">
+            <span class="w-2 h-2 bg-indigo-500 rounded-full mr-1.5"></span>
+            <span x-text="stores.filter(s => s.connected).length + '/' + stores.length + ' stores'"></span>
+          </span>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- ==================== DASHBOARD VIEW ==================== -->
+        <div x-show="currentView === 'dashboard'">
+          <!-- Stats Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="card">
+              <p class="text-sm font-medium text-gray-500">Connected Stores</p>
+              <p class="text-2xl font-bold text-gray-900 mt-1" x-text="stores.filter(s => s.connected).length + ' / ' + stores.length"></p>
+            </div>
+            <div class="card">
+              <p class="text-sm font-medium text-gray-500">Total Builds</p>
+              <p class="text-2xl font-bold text-gray-900 mt-1" x-text="builds.length"></p>
+            </div>
+            <div class="card">
+              <p class="text-sm font-medium text-gray-500">Active Jobs</p>
+              <p class="text-2xl font-bold text-gray-900 mt-1" x-text="jobs.filter(j => j.status === 'running' || j.status === 'pending').length"></p>
+            </div>
+            <div class="card">
+              <p class="text-sm font-medium text-gray-500">Failed Jobs</p>
+              <p class="text-2xl font-bold text-gray-900 mt-1" x-text="jobs.filter(j => j.status === 'failed').length"></p>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Actions</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <button @click="currentView = 'upload'" class="card hover:border-indigo-300 hover:shadow-md transition-all text-left group">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                  <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">Upload Build</p>
+                  <p class="text-sm text-gray-500">Upload APK, AAB, or IPA</p>
+                </div>
+              </div>
+            </button>
+            <button @click="currentView = 'publish'" class="card hover:border-indigo-300 hover:shadow-md transition-all text-left group">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84"/></svg>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">Publish to Stores</p>
+                  <p class="text-sm text-gray-500">Multi-store publishing</p>
+                </div>
+              </div>
+            </button>
+            <button @click="currentView = 'stores'" class="card hover:border-indigo-300 hover:shadow-md transition-all text-left group">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center group-hover:bg-yellow-200 transition-colors">
+                  <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900">Configure Stores</p>
+                  <p class="text-sm text-gray-500">Manage store connections</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Recent Builds -->
+            <div class="card">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">Recent Builds</h3>
+                <button @click="currentView = 'upload'" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">View all</button>
+              </div>
+              <template x-if="builds.length === 0">
+                <p class="text-sm text-gray-500 py-4 text-center">No builds yet. Upload your first build.</p>
+              </template>
+              <div class="space-y-3">
+                <template x-for="build in builds.slice(0, 5)" :key="build.artifact_id || build.build_id">
+                  <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div>
+                      <p class="text-sm font-medium text-gray-900" x-text="build.app_id || 'Unknown App'"></p>
+                      <p class="text-xs text-gray-500" x-text="build.version_name + ' — ' + build.store_id"></p>
+                    </div>
+                    <span :class="build.status === 'completed' ? 'bg-green-100 text-green-700' : build.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'" class="badge" x-text="build.status"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Recent Jobs -->
+            <div class="card">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">Recent Jobs</h3>
+                <button @click="currentView = 'jobs'" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">View all</button>
+              </div>
+              <template x-if="jobs.length === 0">
+                <p class="text-sm text-gray-500 py-4 text-center">No jobs yet.</p>
+              </template>
+              <div class="space-y-3">
+                <template x-for="job in jobs.slice(0, 5)" :key="job.id">
+                  <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div>
+                      <p class="text-sm font-medium text-gray-900" x-text="job.type"></p>
+                      <p class="text-xs text-gray-500" x-text="relativeTime(job.createdAt)"></p>
+                    </div>
+                    <span :class="getJobStatusClass(job.status)" class="badge" x-text="job.status"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STORES VIEW ==================== -->
+        <div x-show="currentView === 'stores'">
+          <div class="card">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Store Connections</h3>
+                <p class="text-sm text-gray-500 mt-1">Configure credentials for each app store.</p>
+              </div>
+              <span class="badge bg-indigo-100 text-indigo-700" x-text="stores.filter(s => s.connected).length + ' connected'"></span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="table-header">Store</th>
+                    <th class="table-header">Auth Method</th>
+                    <th class="table-header">Status</th>
+                    <th class="table-header">Capabilities</th>
+                    <th class="table-header text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <template x-for="store in stores" :key="store.storeId">
+                    <tr class="hover:bg-gray-50">
+                      <td class="table-cell font-medium text-gray-900" x-text="store.storeName"></td>
+                      <td class="table-cell text-gray-500" x-text="store.authMethod || '—'"></td>
+                      <td class="table-cell">
+                        <span x-show="store.connected" class="badge bg-green-100 text-green-700">
+                          <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>
+                          Connected
+                        </span>
+                        <span x-show="!store.connected" class="badge bg-gray-100 text-gray-500">Not Configured</span>
+                      </td>
+                      <td class="table-cell text-gray-500">
+                        <div class="flex flex-wrap gap-1">
+                          <template x-for="cap in (store.capabilities || [])" :key="cap">
+                            <span class="inline-flex px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600" x-text="cap"></span>
+                          </template>
+                        </div>
+                      </td>
+                      <td class="table-cell text-right">
+                        <button @click="openConfigModal(store)" class="btn-secondary text-xs px-3 py-1.5">Configure</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <template x-if="stores.length === 0">
+              <p class="text-sm text-gray-500 py-8 text-center">Loading stores...</p>
+            </template>
+          </div>
+
+          <!-- Configure Store Modal -->
+          <div x-show="configModal.open" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-transition>
+            <div @click="configModal.open = false" class="fixed inset-0 bg-black bg-opacity-50"></div>
+            <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-screen overflow-y-auto" @click.stop>
+              <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900">Configure <span x-text="stores.find(s => s.storeId === configModal.storeId)?.storeName || ''"></span></h3>
+              </div>
+              <div class="px-6 py-4 space-y-4">
+                <!-- Google Play -->
+                <template x-if="configModal.storeId === 'google_play'">
+                  <div>
+                    <label class="label">Service Account JSON</label>
+                    <textarea x-model="configModal.credentials.service_account_json" class="input h-32 font-mono text-xs" placeholder="Paste your service account JSON here..."></textarea>
+                  </div>
+                </template>
+                <!-- App Store -->
+                <template x-if="configModal.storeId === 'app_store'">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="label">Issuer ID</label>
+                      <input type="text" x-model="configModal.credentials.issuer_id" class="input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                    </div>
+                    <div>
+                      <label class="label">Key ID</label>
+                      <input type="text" x-model="configModal.credentials.key_id" class="input" placeholder="XXXXXXXXXX">
+                    </div>
+                    <div>
+                      <label class="label">Private Key</label>
+                      <textarea x-model="configModal.credentials.private_key" class="input h-32 font-mono text-xs" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+                    </div>
+                  </div>
+                </template>
+                <!-- Huawei -->
+                <template x-if="configModal.storeId === 'huawei_agc'">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="label">Client ID</label>
+                      <input type="text" x-model="configModal.credentials.client_id" class="input" placeholder="Client ID">
+                    </div>
+                    <div>
+                      <label class="label">Client Secret</label>
+                      <input type="text" x-model="configModal.credentials.client_secret" class="input" placeholder="Client Secret">
+                    </div>
+                  </div>
+                </template>
+                <!-- Xiaomi -->
+                <template x-if="configModal.storeId === 'xiaomi'">
+                  <div>
+                    <label class="label">Private Key</label>
+                    <textarea x-model="configModal.credentials.private_key" class="input h-32 font-mono text-xs" placeholder="Paste your private key here..."></textarea>
+                  </div>
+                </template>
+                <!-- OPPO -->
+                <template x-if="configModal.storeId === 'oppo'">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="label">Client Key</label>
+                      <input type="text" x-model="configModal.credentials.client_key" class="input" placeholder="Client Key">
+                    </div>
+                    <div>
+                      <label class="label">Client Secret</label>
+                      <input type="text" x-model="configModal.credentials.client_secret" class="input" placeholder="Client Secret">
+                    </div>
+                  </div>
+                </template>
+                <!-- vivo -->
+                <template x-if="configModal.storeId === 'vivo'">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="label">Access Key</label>
+                      <input type="text" x-model="configModal.credentials.access_key" class="input" placeholder="Access Key">
+                    </div>
+                    <div>
+                      <label class="label">Access Secret</label>
+                      <input type="text" x-model="configModal.credentials.access_secret" class="input" placeholder="Access Secret">
+                    </div>
+                  </div>
+                </template>
+                <!-- Honor -->
+                <template x-if="configModal.storeId === 'honor'">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="label">Client ID</label>
+                      <input type="text" x-model="configModal.credentials.client_id" class="input" placeholder="Client ID">
+                    </div>
+                    <div>
+                      <label class="label">Client Secret</label>
+                      <input type="text" x-model="configModal.credentials.client_secret" class="input" placeholder="Client Secret">
+                    </div>
+                  </div>
+                </template>
+                <!-- Pgyer -->
+                <template x-if="configModal.storeId === 'pgyer'">
+                  <div>
+                    <label class="label">API Key</label>
+                    <input type="text" x-model="configModal.credentials.api_key" class="input" placeholder="API Key">
+                  </div>
+                </template>
+              </div>
+              <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button @click="configModal.open = false" class="btn-secondary">Cancel</button>
+                <button @click="configureStore()" class="btn-primary">Save &amp; Connect</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== UPLOAD VIEW ==================== -->
+        <div x-show="currentView === 'upload'">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Upload Form -->
+            <div class="lg:col-span-2 card">
+              <h3 class="text-lg font-semibold text-gray-900 mb-6">Upload Build Artifact</h3>
+              <form @submit.prevent="uploadBuild($event)">
+                <!-- Drop Zone -->
+                <div class="drop-zone mb-6" :class="dragover ? 'dragover' : ''" @dragover.prevent="dragover = true" @dragleave.prevent="dragover = false" @drop.prevent="handleDrop($event)" @click="$refs.fileInput.click()">
+                  <input type="file" x-ref="fileInput" @change="handleFileSelect($event)" class="hidden" accept=".apk,.aab,.ipa,.zip">
+                  <template x-if="!selectedFile">
+                    <div>
+                      <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <p class="mt-3 text-sm text-gray-600">Drag and drop your build file, or <span class="text-indigo-600 font-medium">browse</span></p>
+                      <p class="mt-1 text-xs text-gray-400">Supports APK, AAB, IPA, ZIP</p>
+                    </div>
+                  </template>
+                  <template x-if="selectedFile">
+                    <div class="flex items-center justify-center gap-3">
+                      <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      <div class="text-left">
+                        <p class="text-sm font-medium text-gray-900" x-text="selectedFile.name"></p>
+                        <p class="text-xs text-gray-500" x-text="formatFileSize(selectedFile.size)"></p>
+                      </div>
+                      <button type="button" @click.stop="selectedFile = null; $refs.fileInput.value = ''" class="ml-2 text-gray-400 hover:text-red-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label class="label">App ID</label>
+                    <input type="text" x-model="uploadForm.appId" class="input" placeholder="com.example.myapp" required>
+                  </div>
+                  <div>
+                    <label class="label">Target Store</label>
+                    <select x-model="uploadForm.storeId" class="select" required>
+                      <option value="">Select a store...</option>
+                      <template x-for="store in stores.filter(s => s.connected)" :key="store.storeId">
+                        <option :value="store.storeId" x-text="store.storeName"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="label">File Type</label>
+                    <select x-model="uploadForm.fileType" class="select">
+                      <option value="">Auto-detect</option>
+                      <option value="apk">APK</option>
+                      <option value="aab">AAB</option>
+                      <option value="ipa">IPA</option>
+                      <option value="zip">ZIP</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" :disabled="uploading || !selectedFile || !uploadForm.appId || !uploadForm.storeId" class="btn-primary w-full sm:w-auto">
+                  <template x-if="uploading">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  </template>
+                  <span x-text="uploading ? 'Uploading...' : 'Upload Build'"></span>
+                </button>
+              </form>
+            </div>
+
+            <!-- Upload History -->
+            <div class="card">
+              <h3 class="font-semibold text-gray-900 mb-4">Recent Uploads</h3>
+              <template x-if="builds.length === 0">
+                <p class="text-sm text-gray-500 py-4 text-center">No builds yet.</p>
+              </template>
+              <div class="space-y-3">
+                <template x-for="build in builds.slice(0, 10)" :key="build.artifact_id || build.build_id">
+                  <div class="p-3 bg-gray-50 rounded-lg">
+                    <p class="text-sm font-medium text-gray-900" x-text="build.app_id"></p>
+                    <p class="text-xs text-gray-500 mt-0.5" x-text="'v' + build.version_name + ' — ' + build.store_id"></p>
+                    <div class="flex items-center justify-between mt-2">
+                      <span :class="build.status === 'completed' ? 'bg-green-100 text-green-700' : build.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'" class="badge text-xs" x-text="build.status"></span>
+                      <span class="text-xs text-gray-400" x-text="relativeTime(build.timestamp)"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== PUBLISH VIEW ==================== -->
+        <div x-show="currentView === 'publish'">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 card">
+              <h3 class="text-lg font-semibold text-gray-900 mb-6">Publish to Stores</h3>
+              <div class="space-y-6">
+                <!-- App ID + Load Builds -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div class="sm:col-span-2">
+                    <label class="label">App ID</label>
+                    <input type="text" x-model="publishForm.appId" class="input" placeholder="com.example.myapp">
+                  </div>
+                  <div class="flex items-end">
+                    <button @click="fetchBuilds(publishForm.appId)" :disabled="!publishForm.appId" class="btn-secondary w-full">Load Builds</button>
+                  </div>
+                </div>
+
+                <!-- Build Selector -->
+                <div>
+                  <label class="label">Select Build</label>
+                  <select x-model="publishForm.buildId" class="select">
+                    <option value="">Choose a build...</option>
+                    <template x-for="build in builds.filter(b => !publishForm.appId || b.app_id === publishForm.appId)" :key="build.build_id">
+                      <option :value="build.build_id" x-text="'v' + build.version_name + ' (' + build.store_id + ') — ' + build.build_id.slice(0, 8)"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <!-- Target Stores -->
+                <div>
+                  <label class="label mb-3">Target Stores</label>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <template x-for="store in stores.filter(s => s.connected)" :key="store.storeId">
+                      <label class="flex items-center gap-2 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
+                        <input type="checkbox" :value="store.storeId" x-model="publishForm.storeIds" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-sm font-medium text-gray-700" x-text="store.storeName"></span>
+                      </label>
+                    </template>
+                  </div>
+                  <template x-if="stores.filter(s => s.connected).length === 0">
+                    <p class="text-sm text-gray-500 mt-2">No stores connected. <button @click="currentView = 'stores'" class="text-indigo-600 hover:text-indigo-700 font-medium">Configure stores first.</button></p>
+                  </template>
+                </div>
+
+                <!-- Version & Notes -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="label">Version Name (optional)</label>
+                    <input type="text" x-model="publishForm.versionName" class="input" placeholder="1.0.0">
+                  </div>
+                </div>
+                <div>
+                  <label class="label">Release Notes (optional)</label>
+                  <textarea x-model="publishForm.releaseNotes" class="input h-24" placeholder="What's new in this version..."></textarea>
+                </div>
+
+                <!-- Publish Button -->
+                <button @click="publishToStores()" :disabled="publishing || !publishForm.buildId || publishForm.storeIds.length === 0" class="btn-primary w-full sm:w-auto">
+                  <template x-if="publishing">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  </template>
+                  <span x-text="publishing ? 'Publishing...' : 'Publish to ' + publishForm.storeIds.length + ' Store(s)'"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Publish Results -->
+            <div class="card">
+              <h3 class="font-semibold text-gray-900 mb-4">Results</h3>
+              <template x-if="publishResults.length === 0">
+                <p class="text-sm text-gray-500 py-4 text-center">Publish results will appear here.</p>
+              </template>
+              <div class="space-y-3">
+                <template x-for="result in publishResults" :key="result.store_id">
+                  <div class="flex items-start gap-3 p-3 rounded-lg" :class="result.success ? 'bg-green-50' : 'bg-red-50'">
+                    <template x-if="result.success">
+                      <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </template>
+                    <template x-if="!result.success">
+                      <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </template>
+                    <div>
+                      <p class="text-sm font-medium" :class="result.success ? 'text-green-800' : 'text-red-800'" x-text="stores.find(s => s.storeId === result.store_id)?.storeName || result.store_id"></p>
+                      <p class="text-xs mt-0.5" :class="result.success ? 'text-green-600' : 'text-red-600'" x-text="result.message"></p>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== STATUS VIEW ==================== -->
+        <div x-show="currentView === 'status'">
+          <!-- Search -->
+          <div class="card mb-6">
+            <div class="flex flex-col sm:flex-row gap-4">
+              <div class="flex-1">
+                <label class="label">App ID</label>
+                <input type="text" x-model="statusAppId" class="input" placeholder="com.example.myapp" @keydown.enter="checkStatus()">
+              </div>
+              <div class="flex items-end">
+                <button @click="checkStatus()" :disabled="!statusAppId" class="btn-primary">Check Status</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Cards Grid -->
+          <template x-if="statusResults.length > 0">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <template x-for="item in statusResults" :key="item.storeId">
+                <div class="card">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold text-gray-900" x-text="item.storeName"></h4>
+                    <span :class="getStatusColor(item.reviewStatus)" class="badge" x-text="item.reviewStatus || 'unknown'"></span>
+                  </div>
+                  <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">Live Status</span>
+                      <span :class="getStatusColor(item.liveStatus)" class="badge" x-text="item.liveStatus || 'unknown'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">Version</span>
+                      <span class="font-medium text-gray-900" x-text="item.version || '—'"></span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">Updated</span>
+                      <span class="text-gray-600" x-text="item.lastUpdated ? relativeTime(item.lastUpdated) : '—'"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <template x-if="statusResults.length === 0 && statusAppId">
+            <p class="text-sm text-gray-500 text-center py-12">Enter an App ID and click "Check Status" to see publishing status across stores.</p>
+          </template>
+          <template x-if="!statusAppId">
+            <div class="text-center py-16">
+              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <h3 class="mt-4 text-sm font-medium text-gray-900">No status to display</h3>
+              <p class="mt-1 text-sm text-gray-500">Enter an App ID to check publishing status across all stores.</p>
+            </div>
+          </template>
+        </div>
+
+        <!-- ==================== JOBS VIEW ==================== -->
+        <div x-show="currentView === 'jobs'">
+          <div class="card">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Job Queue</h3>
+                <p class="text-sm text-gray-500 mt-1 flex items-center gap-2">
+                  <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  Auto-refreshing every 10s
+                </p>
+              </div>
+              <div class="flex gap-1 bg-gray-100 rounded-lg p-1">
+                <button @click="jobFilter = 'all'" :class="jobFilter === 'all' ? 'active' : ''" class="tab">All</button>
+                <button @click="jobFilter = 'pending'" :class="jobFilter === 'pending' ? 'active' : ''" class="tab">Pending</button>
+                <button @click="jobFilter = 'running'" :class="jobFilter === 'running' ? 'active' : ''" class="tab">Running</button>
+                <button @click="jobFilter = 'completed'" :class="jobFilter === 'completed' ? 'active' : ''" class="tab">Completed</button>
+                <button @click="jobFilter = 'failed'" :class="jobFilter === 'failed' ? 'active' : ''" class="tab">Failed</button>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="table-header">ID</th>
+                    <th class="table-header">Type</th>
+                    <th class="table-header">Status</th>
+                    <th class="table-header">Created</th>
+                    <th class="table-header">Retries</th>
+                    <th class="table-header text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <template x-for="job in filteredJobs()" :key="job.id">
+                    <tr class="hover:bg-gray-50">
+                      <td class="table-cell font-mono text-gray-500 text-xs" x-text="job.id.slice(0, 8) + '...'"></td>
+                      <td class="table-cell font-medium text-gray-900" x-text="job.type"></td>
+                      <td class="table-cell">
+                        <span :class="getJobStatusClass(job.status)" class="badge" x-text="job.status"></span>
+                      </td>
+                      <td class="table-cell text-gray-500" x-text="relativeTime(job.createdAt)"></td>
+                      <td class="table-cell text-gray-500" x-text="job.retries || 0"></td>
+                      <td class="table-cell text-right">
+                        <button x-show="job.status === 'failed'" @click="retryJob(job.id)" class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">Retry</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <template x-if="filteredJobs().length === 0">
+              <p class="text-sm text-gray-500 py-8 text-center" x-text="jobFilter === 'all' ? 'No jobs yet.' : 'No ' + jobFilter + ' jobs.'"></p>
+            </template>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
