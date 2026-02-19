@@ -130,13 +130,19 @@ export class VivoAdapter extends AbstractStoreAdapter {
   // --- Release (not supported separately) ---
 
   async createRelease(_params: ReleaseParams): Promise<ReleaseResult> {
-    return { success: false, message: 'vivo does not have a separate release step.' };
+    return {
+      success: false,
+      message: 'vivo does not have a separate release step; uploading the APK via uploadBuild triggers the review process automatically.',
+    };
   }
 
   // --- Listing (not supported) ---
 
   async updateListing(_params: ListingParams): Promise<ListingResult> {
-    return { success: false, message: 'vivo listing is managed via the developer console.' };
+    return {
+      success: false,
+      message: 'vivo does not support programmatic listing updates via API. Please manage store listing through the vivo Developer Console at https://dev.vivo.com.cn.',
+    };
   }
 
   // --- Submit for Review ---
@@ -199,20 +205,23 @@ export class VivoAdapter extends AbstractStoreAdapter {
       });
 
       const info = resp.data.data;
+      // vivo status codes per developer documentation:
+      // 0 = draft, 1 = in_review, 2 = approved/live, 3 = rejected, 4 = removed
       const statusMap: Record<number, string> = {
         0: 'draft',
         1: 'in_review',
-        2: 'approved',
+        2: 'live',
         3: 'rejected',
-        4: 'live',
+        4: 'removed',
       };
 
+      const status = info?.status ?? 0;
       return {
         appId,
         storeName: 'vivo App Store',
         currentVersion: info?.versionName,
-        reviewStatus: statusMap[info?.status ?? 0] ?? 'unknown',
-        liveStatus: info?.status === 4 ? 'live' : 'not_live',
+        reviewStatus: statusMap[status] ?? 'unknown',
+        liveStatus: status === 2 ? 'live' : 'not_live',
         lastUpdated: info?.updateTime,
       };
     }, 'getStatus');

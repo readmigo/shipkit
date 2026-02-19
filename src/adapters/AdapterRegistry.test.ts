@@ -67,6 +67,14 @@ vi.mock('./vivo/VivoAdapter.js', () => ({
   },
 }));
 
+vi.mock('./tencent/TencentAdapter.js', () => ({
+  TencentAdapter: class {
+    getCapabilities() {
+      return { storeId: 'tencent_myapp', storeName: 'Tencent MyApp (应用宝)' };
+    }
+  },
+}));
+
 describe('AdapterRegistry', () => {
   describe('createDefault', () => {
     it('should register google_play, app_store, and huawei_agc adapters', () => {
@@ -77,7 +85,7 @@ describe('AdapterRegistry', () => {
       expect(stores).toContain('google_play');
       expect(stores).toContain('app_store');
       expect(stores).toContain('huawei_agc');
-      expect(stores).toHaveLength(8);
+      expect(stores).toHaveLength(9);
     });
   });
 
@@ -126,7 +134,8 @@ describe('AdapterRegistry', () => {
       expect(stores).toContain('honor');
       expect(stores).toContain('xiaomi');
       expect(stores).toContain('vivo');
-      expect(stores).toHaveLength(8);
+      expect(stores).toContain('tencent_myapp');
+      expect(stores).toHaveLength(9);
     });
 
     it('should return empty array for empty registry', () => {
@@ -187,7 +196,7 @@ describe('AdapterRegistry', () => {
       const registry = AdapterRegistry.createDefault(authManager);
 
       const allCaps = registry.getAllCapabilities();
-      expect(allCaps).toHaveLength(8);
+      expect(allCaps).toHaveLength(9);
     });
 
     it('should return empty array for empty registry', () => {

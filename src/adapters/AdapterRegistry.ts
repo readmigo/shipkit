@@ -13,9 +13,10 @@ import { OppoAdapter } from './oppo/OppoAdapter.js';
 import { HonorAdapter } from './honor/HonorAdapter.js';
 import { XiaomiAdapter } from './xiaomi/XiaomiAdapter.js';
 import { VivoAdapter } from './vivo/VivoAdapter.js';
+import { TencentAdapter } from './tencent/TencentAdapter.js';
 import { AuthManager } from '../auth/AuthManager.js';
 
-export type StoreId = 'google_play' | 'app_store' | 'huawei_agc' | 'pgyer' | 'oppo' | 'honor' | 'xiaomi' | 'vivo';
+export type StoreId = 'google_play' | 'app_store' | 'huawei_agc' | 'pgyer' | 'oppo' | 'honor' | 'xiaomi' | 'vivo' | 'tencent_myapp';
 
 export class AdapterRegistry {
   private adapters = new Map<string, StoreAdapter>();
@@ -33,6 +34,7 @@ export class AdapterRegistry {
     registry.register('honor', new HonorAdapter(authManager));
     registry.register('xiaomi', new XiaomiAdapter(authManager));
     registry.register('vivo', new VivoAdapter(authManager));
+    registry.register('tencent_myapp', new TencentAdapter(authManager));
     return registry;
   }
 
