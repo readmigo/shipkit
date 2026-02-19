@@ -1,5 +1,5 @@
 {
-  "name": "@nicetool/shipkit-mcp",
+  "name": "@readmigo/shipkit-mcp",
   "version": "0.1.0",
   "description": "AI Agent-friendly unified app publishing MCP Server for Google Play, Apple App Store, and 10+ Chinese Android stores",
   "type": "module",
@@ -51,11 +51,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nicetool/shipkit-mcp.git"
+    "url": "git+https://github.com/readmigo/shipkit.git"
   },
-  "homepage": "https://github.com/nicetool/shipkit-mcp#readme",
+  "homepage": "https://github.com/readmigo/shipkit#readme",
   "bugs": {
-    "url": "https://github.com/nicetool/shipkit-mcp/issues"
+    "url": "https://github.com/readmigo/shipkit/issues"
   },
   "engines": {
     "node": ">=18.0.0"

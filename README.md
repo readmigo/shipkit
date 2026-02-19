@@ -1,6 +1,6 @@
 # ShipKit — Unified App Publishing MCP Server
 
-[![npm version](https://badge.fury.io/js/@nicetool%2Fshipkit-mcp.svg)](https://badge.fury.io/js/@nicetool%2Fshipkit-mcp)
+[![npm version](https://badge.fury.io/js/@readmigo%2Fshipkit-mcp.svg)](https://badge.fury.io/js/@readmigo%2Fshipkit-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node >= 18](https://img.shields.io/badge/Node-%3E%3D18-brightgreen.svg)](https://nodejs.org/)
 
@@ -51,7 +51,7 @@ And ShipKit handles the complexity: authentication, build artifact uploads, meta
 ### Installation for Claude Code
 
 ```bash
-claude mcp add shipkit -- npx @nicetool/shipkit-mcp
+claude mcp add shipkit -- npx @readmigo/shipkit-mcp
 ```
 
 ### Installation for Claude Desktop / Cursor / Windsurf
@@ -65,7 +65,7 @@ Add to your MCP configuration file:
   "mcpServers": {
     "shipkit": {
       "command": "npx",
-      "args": ["@nicetool/shipkit-mcp"],
+      "args": ["@readmigo/shipkit-mcp"],
       "env": {
         "SHIPKIT_API_KEY": "sk-your-api-key-here"
       }
@@ -81,7 +81,7 @@ Add to your MCP configuration file:
   "mcpServers": {
     "shipkit": {
       "command": "npx",
-      "args": ["@nicetool/shipkit-mcp"],
+      "args": ["@readmigo/shipkit-mcp"],
       "env": {
         "SHIPKIT_API_KEY": "sk-your-api-key-here"
       }

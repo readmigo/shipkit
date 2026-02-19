@@ -12,7 +12,7 @@ startCommand:
   commandFunction: |-
     (config) => ({
       command: 'npx',
-      args: ['@nicetool/shipkit-mcp'],
+      args: ['@readmigo/shipkit-mcp'],
       env: {
         SHIPKIT_API_KEY: config.SHIPKIT_API_KEY || ''
       }

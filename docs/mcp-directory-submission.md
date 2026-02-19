@@ -14,9 +14,9 @@
 
 **License**: MIT
 
-**Repository**: https://github.com/nicetool/shipkit-mcp
+**Repository**: https://github.com/readmigo/shipkit
 
-**npm**: https://www.npmjs.com/package/@nicetool/shipkit-mcp
+**npm**: https://www.npmjs.com/package/@readmigo/shipkit-mcp
 
 **Supported Platforms**: Claude Code, Claude Desktop, Cursor, Windsurf
 
@@ -39,7 +39,7 @@ Key features:
 ## Install Command
 
 ```
-npx @nicetool/shipkit-mcp
+npx @readmigo/shipkit-mcp
 ```
 
 ## MCP Config
@@ -49,7 +49,7 @@ npx @nicetool/shipkit-mcp
   "mcpServers": {
     "shipkit": {
       "command": "npx",
-      "args": ["@nicetool/shipkit-mcp"]
+      "args": ["@readmigo/shipkit-mcp"]
     }
   }
 }
@@ -86,7 +86,7 @@ Auto-scrapes from npm/GitHub. Ensure `package.json` keywords and README are up t
 
 ### mcp.so
 
-Submit the GitHub repository URL: https://github.com/nicetool/shipkit-mcp
+Submit the GitHub repository URL: https://github.com/readmigo/shipkit
 
 The directory auto-parses repository metadata.
 
@@ -98,8 +98,8 @@ Manual submission required. Use the description, tools list, and MCP config from
 
 ## Submission Checklist
 
-- [ ] npm package published: `@nicetool/shipkit-mcp`
-- [ ] GitHub repository public: `nicetool/shipkit-mcp`
+- [ ] npm package published: `@readmigo/shipkit-mcp`
+- [ ] GitHub repository public: `readmigo/shipkit`
 - [ ] smithery.ai: Submit via https://smithery.ai/submit with `smithery.yaml`
 - [ ] glama.ai: Verify auto-indexed after npm publish
 - [ ] mcp.so: Submit repository URL
