@@ -8,6 +8,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
+// Commercialization infrastructure — initialise singletons early so the DB
+// schema is always up-to-date before any tool is registered.
+import { getApiKeyManager } from '../auth/ApiKeyManager.js';
+import { getQuotaManager } from '../analytics/QuotaManager.js';
+import { getUsageRecorder } from '../analytics/UsageRecorder.js';
+
 // Tools
 import { registerStoreListTool } from './tools/store-list.js';
 import { registerStoreConnectTool } from './tools/store-connect.js';
@@ -22,6 +28,13 @@ import { registerComplianceCheckTool } from './tools/compliance-check.js';
 import { registerAppStatusResource } from './resources/app-status-resource.js';
 
 export function createMcpServer(): McpServer {
+  // Initialise commercialisation singletons. When SHIPKIT_API_KEY is set,
+  // the managers are ready to validate and record usage from the first call.
+  // When it is absent, tools run in open mode (no quota enforcement).
+  getApiKeyManager();
+  getQuotaManager();
+  getUsageRecorder();
+
   const server = new McpServer(
     {
       name: 'shipkit',

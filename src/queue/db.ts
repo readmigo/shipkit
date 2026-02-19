@@ -46,6 +46,46 @@ export function getDb(): Database.Database {
       last_poll   TEXT,
       active      INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id                    TEXT PRIMARY KEY,
+      key_hash              TEXT UNIQUE NOT NULL,
+      plan                  TEXT NOT NULL DEFAULT 'free',
+      user_id               TEXT,
+      email                 TEXT,
+      monthly_publish_count INTEGER DEFAULT 0,
+      monthly_call_count    INTEGER DEFAULT 0,
+      quota_resets_at       TEXT NOT NULL,
+      created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+      last_used_at          TEXT,
+      is_active             INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS usage_events (
+      id               TEXT PRIMARY KEY,
+      api_key_id       TEXT,
+      tool_name        TEXT NOT NULL,
+      store_id         TEXT,
+      app_id           TEXT,
+      status           TEXT NOT NULL DEFAULT 'success',
+      duration_ms      INTEGER,
+      file_size_bytes  INTEGER,
+      error_message    TEXT,
+      created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS usage_daily_agg (
+      date             TEXT NOT NULL,
+      tool_name        TEXT NOT NULL,
+      store_id         TEXT NOT NULL DEFAULT '',
+      total_calls      INTEGER DEFAULT 0,
+      success_calls    INTEGER DEFAULT 0,
+      failed_calls     INTEGER DEFAULT 0,
+      avg_duration_ms  INTEGER DEFAULT 0,
+      total_file_bytes INTEGER DEFAULT 0,
+      unique_api_keys  INTEGER DEFAULT 0,
+      PRIMARY KEY (date, tool_name, store_id)
+    );
   `);
 
   return _db;
