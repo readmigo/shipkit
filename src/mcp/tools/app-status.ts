@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { getRegistry } from '../registry.js';
 
 const STORE_IDS = [
   'google_play', 'app_store', 'huawei_agc',
@@ -38,28 +39,55 @@ export function registerAppStatusTool(server: McpServer): void {
       },
     },
     async ({ app_id, stores, version_name }) => {
-      // Return mock status data — real implementation will query adapters
-      const targetStores = stores ?? ['google_play', 'app_store'];
-      const resolvedVersion = version_name ?? '1.0.0';
+      const registry = await getRegistry();
+      const connectedStores = registry.getSupportedStores();
+      const targetStores = stores ?? connectedStores;
 
-      const statuses = targetStores.map((store) => ({
-        store,
-        version_name: resolvedVersion,
-        version_code: 1,
-        track: 'production' as const,
-        release_status: 'draft' as const,
-        review_status: 'pending' as const,
-      }));
+      if (targetStores.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              app_id,
+              statuses: [],
+              message: 'No stores connected. Use store.connect to configure credentials.',
+            }, null, 2),
+          }],
+        };
+      }
 
-      const result = { app_id, statuses };
+      const statuses = await Promise.all(
+        targetStores.map(async (store) => {
+          const adapter = registry.getAdapter(store);
+          if (!adapter) {
+            return {
+              store,
+              error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+            };
+          }
+          try {
+            const result = await adapter.getStatus(app_id);
+            return {
+              store,
+              version_name: result.currentVersion ?? version_name ?? 'unknown',
+              review_status: result.reviewStatus,
+              live_status: result.liveStatus,
+              last_updated: result.lastUpdated,
+            };
+          } catch (err) {
+            return {
+              store,
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        })
+      );
 
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ app_id, statuses }, null, 2),
+        }],
       };
     },
   );

@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { getRegistry } from '../registry.js';
 
 const STORE_IDS_LISTING = [
   'google_play', 'app_store', 'huawei_agc',
@@ -63,75 +64,77 @@ export function registerAppListingTool(server: McpServer): void {
       },
     },
     async ({ app_id, store, action, locale, listing_data }) => {
-      if (action === 'get') {
-        // Return mock listing data
-        const listing = {
-          title: 'My App',
-          short_description: 'A great app',
-          full_description: 'A great app that does many things.',
-          keywords: 'app,reading,books',
-          whats_new: 'Bug fixes and improvements',
-          screenshot_count: 5,
-          has_icon: true,
-        };
+      const registry = await getRegistry();
 
+      if (action === 'get') {
+        // Listing read is not yet implemented in adapters — return a placeholder
         const result = {
           app_id,
           store,
           locale: locale ?? 'en-US',
-          listing,
+          note: 'Listing read API not yet implemented. Use store console to view current listing.',
         };
-
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
         };
       }
 
       // action === 'update'
-      const updated_fields: string[] = [];
       const validation_warnings: Array<{ field: string; message: string; severity: 'warning' | 'error' }> = [];
+      const updated_fields: string[] = [];
 
-      if (listing_data) {
-        if (listing_data.title !== undefined) {
-          updated_fields.push('title');
-          if (listing_data.title.length > 30) {
-            validation_warnings.push({
-              field: 'title',
-              message: `Title is ${listing_data.title.length} chars, App Store limit is 30.`,
-              severity: 'error',
-            });
-          }
-        }
-        if (listing_data.short_description !== undefined) {
-          updated_fields.push('short_description');
-        }
-        if (listing_data.full_description !== undefined) {
-          updated_fields.push('full_description');
-        }
-        if (listing_data.keywords !== undefined) {
-          updated_fields.push('keywords');
-        }
-        if (listing_data.whats_new !== undefined) {
-          updated_fields.push('whats_new');
-        }
-        if (listing_data.screenshots !== undefined) {
-          updated_fields.push('screenshots');
-        }
-        if (listing_data.icon_path !== undefined) {
-          updated_fields.push('icon_path');
+      if (listing_data?.title !== undefined) {
+        updated_fields.push('title');
+        if (listing_data.title.length > 30) {
+          validation_warnings.push({
+            field: 'title',
+            message: `Title is ${listing_data.title.length} chars, App Store limit is 30.`,
+            severity: 'error',
+          });
         }
       }
+      if (listing_data?.short_description !== undefined) updated_fields.push('short_description');
+      if (listing_data?.full_description !== undefined) updated_fields.push('full_description');
+      if (listing_data?.keywords !== undefined) updated_fields.push('keywords');
+      if (listing_data?.whats_new !== undefined) updated_fields.push('whats_new');
+      if (listing_data?.screenshots !== undefined) updated_fields.push('screenshots');
+      if (listing_data?.icon_path !== undefined) updated_fields.push('icon_path');
 
-      const result = {
-        app_id,
-        store,
-        locale: locale ?? 'en-US',
-        updated_fields,
-        validation_warnings,
-      };
+      // Call real adapter if available
+      const adapter = registry.getAdapter(store);
+      let adapter_result: { success?: boolean; message?: string; error?: string } = {};
+
+      if (adapter && listing_data) {
+        try {
+          const result = await adapter.updateListing({
+            appId: app_id,
+            locale: locale ?? 'en-US',
+            title: listing_data.title,
+            shortDescription: listing_data.short_description,
+            fullDescription: listing_data.full_description,
+          });
+          adapter_result = { success: result.success, message: result.message };
+        } catch (err) {
+          adapter_result = { error: err instanceof Error ? err.message : String(err) };
+        }
+      } else if (!adapter) {
+        adapter_result = {
+          error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+        };
+      }
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            app_id,
+            store,
+            locale: locale ?? 'en-US',
+            updated_fields,
+            validation_warnings,
+            ...adapter_result,
+          }, null, 2),
+        }],
       };
     },
   );

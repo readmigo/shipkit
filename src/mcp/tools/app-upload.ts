@@ -5,9 +5,10 @@
 import { z } from 'zod';
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ShipKitError, formatMcpError } from '../errors.js';
+import { getRegistry } from '../registry.js';
 
 const FILE_TYPE_EXTENSIONS: Record<string, string> = {
   apk: '.apk',
@@ -16,15 +17,23 @@ const FILE_TYPE_EXTENSIONS: Record<string, string> = {
   hap: '.hap',
 };
 
+// Default target stores inferred from file type
+const FILE_TYPE_DEFAULT_STORES: Record<string, string[]> = {
+  apk: ['google_play', 'huawei_agc'],
+  aab: ['google_play'],
+  ipa: ['app_store'],
+  hap: ['huawei_agc'],
+};
+
 export function registerAppUploadTool(server: McpServer): void {
   server.registerTool(
     'app.upload',
     {
       title: 'Upload Build Artifact',
       description:
-        'Upload an app build artifact to ShipKit. Supports APK, AAB, IPA, and HAP formats. ' +
-        'Upload is idempotent: files with the same SHA256 hash will not be re-uploaded. ' +
-        'The file is validated locally (existence, extension, size) and its SHA256 is computed.',
+        'Upload an app build artifact to one or more stores. Supports APK, AAB, IPA, and HAP formats. ' +
+        'The file is validated locally (existence, extension, size) and its SHA256 is computed. ' +
+        'If stores is not specified, target stores are inferred from file_type (aab→Google Play, ipa→App Store, hap→Huawei).',
       inputSchema: {
         app_id: z.string().describe('Application unique identifier'),
         file_path: z.string().describe('Absolute local file path to the build artifact'),
@@ -33,6 +42,10 @@ export function registerAppUploadTool(server: McpServer): void {
           .describe('Build artifact type'),
         version_name: z.string().describe("Version name, e.g. '2.1.0'"),
         version_code: z.number().int().describe('Version build number (Android versionCode / iOS build number)'),
+        stores: z
+          .array(z.enum(['google_play', 'app_store', 'huawei_agc', 'xiaomi', 'oppo', 'vivo', 'honor']))
+          .optional()
+          .describe('Target stores to upload to. Inferred from file_type if not specified.'),
         idempotency_key: z
           .string()
           .optional()
@@ -45,7 +58,7 @@ export function registerAppUploadTool(server: McpServer): void {
         openWorldHint: false,
       },
     },
-    async ({ app_id, file_path, file_type, version_name, version_code, idempotency_key }) => {
+    async ({ app_id, file_path, file_type, version_name, version_code, stores }) => {
       // Reject path traversal
       if (file_path.includes('..')) {
         const err = new ShipKitError({
@@ -80,33 +93,64 @@ export function registerAppUploadTool(server: McpServer): void {
         return formatMcpError(err);
       }
 
-      // Get file size
+      // Get file size and SHA256
       const stats = statSync(file_path);
       const file_size = stats.size;
-
-      // Compute SHA256
       const fileBuffer = await readFile(file_path);
       const sha256 = createHash('sha256').update(fileBuffer).digest('hex');
+      const artifact_id = `art_${sha256.slice(0, 16)}`;
 
-      const artifact_id = `art_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      // Determine target stores
+      const targetStores = stores ?? FILE_TYPE_DEFAULT_STORES[file_type] ?? [];
+      const registry = await getRegistry();
 
-      const result = {
-        artifact_id,
-        upload_status: 'completed' as const,
-        sha256,
-        file_size,
-        app_id,
-        version_name,
-        version_code,
-      };
+      // Upload to each target store
+      const upload_results = await Promise.all(
+        targetStores.map(async (store) => {
+          const adapter = registry.getAdapter(store);
+          if (!adapter) {
+            return {
+              store,
+              status: 'skipped' as const,
+              reason: `Store '${store}' not configured. Use store.connect to add credentials.`,
+            };
+          }
+          try {
+            const result = await adapter.uploadBuild({
+              appId: app_id,
+              filePath: file_path,
+              fileType: file_type,
+            });
+            return {
+              store,
+              status: result.success ? ('uploaded' as const) : ('failed' as const),
+              build_id: result.buildId,
+              store_ref: result.storeRef,
+              message: result.message,
+            };
+          } catch (err) {
+            return {
+              store,
+              status: 'failed' as const,
+              reason: err instanceof Error ? err.message : String(err),
+            };
+          }
+        })
+      );
 
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            artifact_id,
+            sha256,
+            file_size,
+            app_id,
+            version_name,
+            version_code,
+            upload_results,
+          }, null, 2),
+        }],
       };
     },
   );

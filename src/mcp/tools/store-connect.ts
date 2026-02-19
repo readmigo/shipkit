@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ShipKitError, formatMcpError } from '../errors.js';
+import { invalidateRegistry } from '../registry.js';
 
 const CREDENTIALS_DIR = join(homedir(), '.shipkit', 'credentials');
 
@@ -101,6 +102,9 @@ export function registerStoreConnectTool(server: McpServer): void {
       await writeFile(destPath, storedData, 'utf-8');
       // Store actual credentials separately (not in the metadata file)
       await writeFile(join(CREDENTIALS_DIR, `${store_id}.credentials`), credentialsContent, 'utf-8');
+
+      // Invalidate registry so next tool call reloads with new credentials
+      invalidateRegistry();
 
       const result = {
         store_id,

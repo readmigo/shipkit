@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { getRegistry } from '../registry.js';
 
 const STORE_IDS = [
   'google_play', 'app_store', 'huawei_agc',
@@ -22,6 +23,7 @@ export function registerAppPublishTool(server: McpServer): void {
         'Publish an app version to one or more stores in a single call. ' +
         'Supports batch publishing — one request can target multiple platforms simultaneously. ' +
         'Each store reports its result independently (submitted/failed/skipped). ' +
+        'Use build_id (from app.upload result) to reference the uploaded build. ' +
         'Use idempotency_key to prevent duplicate submissions.',
       inputSchema: {
         app_id: z.string().describe('Application unique identifier'),
@@ -30,6 +32,10 @@ export function registerAppPublishTool(server: McpServer): void {
           .min(1)
           .describe('Target app stores for publishing (supports batch)'),
         version_name: z.string().describe("Version name, e.g. '2.1.0'"),
+        build_id: z
+          .string()
+          .optional()
+          .describe('Build ID from app.upload result. Required for stores that need prior upload.'),
         track: z
           .enum(TRACKS)
           .default('production')
@@ -63,28 +69,63 @@ export function registerAppPublishTool(server: McpServer): void {
         openWorldHint: true,
       },
     },
-    async ({ app_id, stores, version_name, track, rollout_percentage, release_notes, auto_release, idempotency_key }) => {
+    async ({ app_id, stores, version_name, build_id, track, rollout_percentage, release_notes }) => {
+      const registry = await getRegistry();
       const publish_id = `pub_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      const effectiveBuildId = build_id ?? version_name;
 
-      // Simulate per-store results — real implementation delegates to adapters
-      const results = stores.map((store) => {
-        const release_id = `rel_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
-        return {
-          store,
-          status: 'submitted' as const,
-          release_id,
-        };
-      });
+      const results = await Promise.all(
+        stores.map(async (store) => {
+          const adapter = registry.getAdapter(store);
+          if (!adapter) {
+            return {
+              store,
+              status: 'skipped' as const,
+              reason: `Store '${store}' not configured. Use store.connect to add credentials.`,
+            };
+          }
 
-      const result = { publish_id, results };
+          try {
+            const releaseResult = await adapter.createRelease({
+              appId: app_id,
+              buildId: effectiveBuildId,
+              track: track ?? 'production',
+              versionName: version_name,
+              releaseNotes: release_notes,
+              rolloutPercentage: rollout_percentage,
+            });
+
+            if (!releaseResult.success) {
+              return {
+                store,
+                status: 'failed' as const,
+                reason: releaseResult.message ?? 'createRelease returned failure',
+              };
+            }
+
+            const submitResult = await adapter.submitForReview({ appId: app_id });
+
+            return {
+              store,
+              status: 'submitted' as const,
+              release_id: releaseResult.releaseId ?? effectiveBuildId,
+              message: submitResult.message,
+            };
+          } catch (err) {
+            return {
+              store,
+              status: 'failed' as const,
+              reason: err instanceof Error ? err.message : String(err),
+            };
+          }
+        })
+      );
 
       return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ publish_id, results }, null, 2),
+        }],
       };
     },
   );

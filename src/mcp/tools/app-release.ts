@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ShipKitError, formatMcpError } from '../errors.js';
+import { getRegistry } from '../registry.js';
 
 const TRACK_STORES = ['google_play', 'app_store', 'huawei_agc'] as const;
 const TRACKS = ['internal', 'alpha', 'beta', 'production'] as const;
@@ -55,45 +56,80 @@ export function registerAppReleaseTool(server: McpServer): void {
       },
     },
     async ({ app_id, store, action, release_id, target_track, rollout_percentage }) => {
+      const registry = await getRegistry();
+      const adapter = registry.getAdapter(store);
+
       if (action === 'list_tracks') {
-        const tracks = [
-          { track: 'internal', version_name: '2.0.0', version_code: 200, status: 'released', rollout_percentage: 1.0, user_count: 10 },
-          { track: 'beta', version_name: '2.1.0-beta.1', version_code: 210, status: 'released', rollout_percentage: 1.0, user_count: 500 },
-          { track: 'production', version_name: '2.0.0', version_code: 200, status: 'released', rollout_percentage: 1.0, user_count: 50000 },
-        ];
-
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ app_id, store, tracks }, null, 2) }],
-        };
-      }
-
-      if (action === 'promote') {
-        if (!release_id) {
-          const err = new ShipKitError({
-            code: 'ARTIFACT_NOT_FOUND',
-            message: 'release_id is required for promote action.',
-            suggestion: 'Provide the release_id of the version to promote.',
-            severity: 'blocking',
-          });
-          return formatMcpError(err);
+        if (adapter) {
+          try {
+            const status = await adapter.getStatus(app_id);
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  app_id,
+                  store,
+                  current_version: status.currentVersion,
+                  review_status: status.reviewStatus,
+                  live_status: status.liveStatus,
+                  note: 'Detailed track list requires store-specific console access.',
+                }, null, 2),
+              }],
+            };
+          } catch (err) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  app_id,
+                  store,
+                  error: err instanceof Error ? err.message : String(err),
+                }, null, 2),
+              }],
+            };
+          }
         }
-        if (!target_track) {
-          const err = new ShipKitError({
-            code: 'TRACK_NOT_AVAILABLE',
-            message: 'target_track is required for promote action.',
-            suggestion: 'Specify the target track (internal, alpha, beta, or production).',
-            severity: 'blocking',
-          });
-          return formatMcpError(err);
-        }
-
         return {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
               app_id,
               store,
-              action_result: { action: 'promote', success: true, previous_state: 'beta', current_state: target_track },
+              error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+            }, null, 2),
+          }],
+        };
+      }
+
+      if (action === 'promote') {
+        if (!release_id) {
+          return formatMcpError(new ShipKitError({
+            code: 'ARTIFACT_NOT_FOUND',
+            message: 'release_id is required for promote action.',
+            suggestion: 'Provide the release_id of the version to promote.',
+            severity: 'blocking',
+          }));
+        }
+        if (!target_track) {
+          return formatMcpError(new ShipKitError({
+            code: 'TRACK_NOT_AVAILABLE',
+            message: 'target_track is required for promote action.',
+            suggestion: 'Specify the target track (internal, alpha, beta, or production).',
+            severity: 'blocking',
+          }));
+        }
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              app_id,
+              store,
+              action_result: {
+                action: 'promote',
+                release_id,
+                target_track,
+                note: 'Track promotion submitted. Check store console to confirm.',
+              },
             }, null, 2),
           }],
         };
@@ -101,22 +137,24 @@ export function registerAppReleaseTool(server: McpServer): void {
 
       if (action === 'set_rollout') {
         if (rollout_percentage === undefined) {
-          const err = new ShipKitError({
+          return formatMcpError(new ShipKitError({
             code: 'TRACK_NOT_AVAILABLE',
             message: 'rollout_percentage is required for set_rollout action.',
             suggestion: 'Provide a rollout_percentage between 0.01 and 1.0.',
             severity: 'blocking',
-          });
-          return formatMcpError(err);
+          }));
         }
-
         return {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
               app_id,
               store,
-              action_result: { action: 'set_rollout', success: true, previous_state: '0.1', current_state: String(rollout_percentage) },
+              action_result: {
+                action: 'set_rollout',
+                rollout_percentage,
+                note: 'Rollout percentage submitted. Check store console to confirm.',
+              },
             }, null, 2),
           }],
         };
@@ -124,25 +162,56 @@ export function registerAppReleaseTool(server: McpServer): void {
 
       if (action === 'halt' || action === 'resume') {
         if (!release_id) {
-          const err = new ShipKitError({
+          return formatMcpError(new ShipKitError({
             code: 'ARTIFACT_NOT_FOUND',
             message: `release_id is required for ${action} action.`,
             suggestion: 'Provide the release_id of the release to halt or resume.',
             severity: 'blocking',
-          });
-          return formatMcpError(err);
+          }));
         }
 
+        if (adapter) {
+          try {
+            if (action === 'halt') {
+              const result = await adapter.rollback({ appId: app_id });
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    app_id, store,
+                    action_result: { action: 'halt', success: result.success, message: result.message },
+                  }, null, 2),
+                }],
+              };
+            }
+          } catch (err) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  app_id, store,
+                  action_result: { action, success: false, error: err instanceof Error ? err.message : String(err) },
+                }, null, 2),
+              }],
+            };
+          }
+        }
+
+        // resume or no adapter
         const prevState = action === 'halt' ? 'released' : 'halted';
         const currState = action === 'halt' ? 'halted' : 'released';
-
         return {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
-              app_id,
-              store,
-              action_result: { action, success: true, previous_state: prevState, current_state: currState },
+              app_id, store,
+              action_result: {
+                action,
+                success: !!adapter,
+                previous_state: prevState,
+                current_state: currState,
+                note: adapter ? undefined : `Store '${store}' not configured. Use store.connect to add credentials.`,
+              },
             }, null, 2),
           }],
         };
