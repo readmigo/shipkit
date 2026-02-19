@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+*.credentials.json
+*.json.key
+*.p8
+*.pem
+.shipkit/
+*.log
+.DS_Store

@@ -1,0 +1,43 @@
+{
+  "name": "@nicetool/shipkit-mcp",
+  "version": "0.1.0",
+  "description": "AI Agent-friendly unified app publishing MCP Server for Google Play, Apple App Store, and 10+ Chinese Android stores",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "shipkit": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "mcp:serve": "node dist/mcp/server.js",
+    "cli": "tsx src/cli/index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "axios": "^1.7.0",
+    "commander": "^12.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["mcp", "app-publishing", "google-play", "apple-app-store", "android", "ios", "china"],
+  "license": "MIT"
+}
