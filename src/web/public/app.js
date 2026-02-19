@@ -254,6 +254,175 @@ function app() {
       }
     },
 
+    // ==================== Analytics Methods ====================
+
+    async loadAnalytics() {
+      await Promise.all([
+        this.fetchAnalyticsOverview(),
+        this.fetchAnalyticsTrends(),
+        this.fetchAnalyticsTools(),
+        this.fetchAnalyticsStores(),
+      ]);
+
+      // Set up 30s auto-refresh for quota if loaded
+      if (!this._quotaInterval) {
+        this._quotaInterval = setInterval(() => {
+          if (this.currentView === 'analytics' && this.analytics.quota) {
+            this.loadQuota();
+          }
+        }, 30000);
+      }
+
+      // Render charts after data is available
+      this.$nextTick(() => this.renderCharts());
+    },
+
+    async fetchAnalyticsOverview() {
+      try {
+        const res = await fetch('/api/analytics/overview');
+        if (!res.ok) return;
+        this.analytics.overview = await res.json();
+      } catch (_) { /* silently ignore */ }
+    },
+
+    async fetchAnalyticsTrends() {
+      try {
+        const res = await fetch('/api/analytics/trends?days=30');
+        if (res.status === 401) { this.analytics.trends = []; return; }
+        if (!res.ok) return;
+        const data = await res.json();
+        this.analytics.trends = data.trends || [];
+      } catch (_) { /* silently ignore */ }
+    },
+
+    async fetchAnalyticsTools() {
+      try {
+        const res = await fetch('/api/analytics/tools');
+        if (res.status === 401) { this.analytics.tools = []; return; }
+        if (!res.ok) return;
+        const data = await res.json();
+        this.analytics.tools = data.tools || [];
+      } catch (_) { /* silently ignore */ }
+    },
+
+    async fetchAnalyticsStores() {
+      try {
+        const res = await fetch('/api/analytics/stores');
+        if (res.status === 401) { this.analytics.stores = []; return; }
+        if (!res.ok) return;
+        const data = await res.json();
+        this.analytics.stores = data.stores || [];
+      } catch (_) { /* silently ignore */ }
+    },
+
+    async loadQuota() {
+      const id = this.analytics.quotaApiKeyId?.trim();
+      if (!id) return;
+      try {
+        const res = await fetch('/api/analytics/quota?apiKeyId=' + encodeURIComponent(id));
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          this.showNotification('error', err.error || 'Failed to load quota');
+          return;
+        }
+        this.analytics.quota = await res.json();
+      } catch (e) {
+        this.showNotification('error', 'Failed to load quota: ' + e.message);
+      }
+    },
+
+    renderCharts() {
+      // Destroy stale chart instances before redraw
+      ['trendChart', 'storeChart', 'toolChart'].forEach(id => {
+        if (this._charts[id]) { this._charts[id].destroy(); delete this._charts[id]; }
+      });
+
+      // Trend line chart
+      const trendCanvas = document.getElementById('trendChart');
+      if (trendCanvas && this.analytics.trends.length > 0) {
+        this._charts.trendChart = new Chart(trendCanvas, {
+          type: 'line',
+          data: {
+            labels: this.analytics.trends.map(t => t.date),
+            datasets: [
+              {
+                label: 'Total Calls',
+                data: this.analytics.trends.map(t => t.totalCalls),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+              },
+              {
+                label: 'Success',
+                data: this.analytics.trends.map(t => t.successCalls),
+                borderColor: '#22c55e',
+                backgroundColor: 'transparent',
+                tension: 0.3,
+                pointRadius: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+            scales: { x: { ticks: { maxTicksLimit: 7, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { font: { size: 10 } } } },
+          },
+        });
+      }
+
+      // Store doughnut chart
+      const storeCanvas = document.getElementById('storeChart');
+      if (storeCanvas && this.analytics.stores.length > 0) {
+        const colors = ['#6366f1','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6'];
+        this._charts.storeChart = new Chart(storeCanvas, {
+          type: 'doughnut',
+          data: {
+            labels: this.analytics.stores.map(s => s.storeId),
+            datasets: [{
+              data: this.analytics.stores.map(s => s.totalCalls),
+              backgroundColor: this.analytics.stores.map((_, i) => colors[i % colors.length]),
+              borderWidth: 2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } },
+            cutout: '65%',
+          },
+        });
+      }
+
+      // Tool bar chart
+      const toolCanvas = document.getElementById('toolChart');
+      if (toolCanvas && this.analytics.tools.length > 0) {
+        const top = this.analytics.tools.slice(0, 8);
+        this._charts.toolChart = new Chart(toolCanvas, {
+          type: 'bar',
+          data: {
+            labels: top.map(t => t.toolName),
+            datasets: [{
+              label: 'Total Calls',
+              data: top.map(t => t.totalCalls),
+              backgroundColor: 'rgba(99,102,241,0.7)',
+              borderColor: '#6366f1',
+              borderWidth: 1,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } },
+          },
+        });
+      }
+    },
+
     // ==================== UI Helpers ====================
 
     openConfigModal(store) {
