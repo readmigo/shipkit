@@ -8,9 +8,14 @@ import type { StoreAdapter, StoreCapabilities } from './base/StoreAdapter.js';
 import { GooglePlayAdapter } from './google-play/GooglePlayAdapter.js';
 import { AppleAscAdapter } from './apple-asc/AppleAscAdapter.js';
 import { HuaweiAgcAdapter } from './huawei-agc/HuaweiAgcAdapter.js';
+import { PgyerAdapter } from './pgyer/PgyerAdapter.js';
+import { OppoAdapter } from './oppo/OppoAdapter.js';
+import { HonorAdapter } from './honor/HonorAdapter.js';
+import { XiaomiAdapter } from './xiaomi/XiaomiAdapter.js';
+import { VivoAdapter } from './vivo/VivoAdapter.js';
 import { AuthManager } from '../auth/AuthManager.js';
 
-export type StoreId = 'google_play' | 'app_store' | 'huawei_agc';
+export type StoreId = 'google_play' | 'app_store' | 'huawei_agc' | 'pgyer' | 'oppo' | 'honor' | 'xiaomi' | 'vivo';
 
 export class AdapterRegistry {
   private adapters = new Map<string, StoreAdapter>();
@@ -23,6 +28,11 @@ export class AdapterRegistry {
     registry.register('google_play', new GooglePlayAdapter(authManager));
     registry.register('app_store', new AppleAscAdapter(authManager));
     registry.register('huawei_agc', new HuaweiAgcAdapter(authManager));
+    registry.register('pgyer', new PgyerAdapter(authManager));
+    registry.register('oppo', new OppoAdapter(authManager));
+    registry.register('honor', new HonorAdapter(authManager));
+    registry.register('xiaomi', new XiaomiAdapter(authManager));
+    registry.register('vivo', new VivoAdapter(authManager));
     return registry;
   }
 

@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ShipKitError, formatMcpError } from '../errors.js';
 import { getRegistry } from '../registry.js';
+import { buildRegistry } from '../../registry/BuildRegistry.js';
 
 const FILE_TYPE_EXTENSIONS: Record<string, string> = {
   apk: '.apk',
@@ -121,9 +122,24 @@ export function registerAppUploadTool(server: McpServer): void {
               filePath: file_path,
               fileType: file_type,
             });
+            const uploadStatus = result.success ? 'uploaded' as const : 'failed' as const;
+            if (result.success && result.buildId) {
+              buildRegistry.save({
+                artifact_id,
+                build_id: result.buildId,
+                store_id: store,
+                app_id,
+                file_path,
+                sha256,
+                version_name,
+                version_code: String(version_code),
+                timestamp: new Date().toISOString(),
+                status: 'uploaded',
+              });
+            }
             return {
               store,
-              status: result.success ? ('uploaded' as const) : ('failed' as const),
+              status: uploadStatus,
               build_id: result.buildId,
               store_ref: result.storeRef,
               message: result.message,

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getRegistry } from '../registry.js';
+import { buildRegistry } from '../../registry/BuildRegistry.js';
 
 const STORE_IDS = [
   'google_play', 'app_store', 'huawei_agc',
@@ -70,9 +71,34 @@ export function registerAppPublishTool(server: McpServer): void {
       },
     },
     async ({ app_id, stores, version_name, build_id, track, rollout_percentage, release_notes }) => {
+      if (!build_id) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: 'build_id is required. Run app.upload first to upload your build file.',
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+
+      const buildRecord = buildRegistry.findByBuildId(build_id);
+      if (!buildRecord) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              error: `Build ID '${build_id}' not found in registry. Please run app.upload first.`,
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+
       const registry = await getRegistry();
       const publish_id = `pub_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-      const effectiveBuildId = build_id ?? version_name;
+      const effectiveBuildId = build_id;
 
       const results = await Promise.all(
         stores.map(async (store) => {

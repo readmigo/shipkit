@@ -27,6 +27,46 @@ vi.mock('./huawei-agc/HuaweiAgcAdapter.js', () => ({
   },
 }));
 
+vi.mock('./pgyer/PgyerAdapter.js', () => ({
+  PgyerAdapter: class {
+    getCapabilities() {
+      return { storeId: 'pgyer', storeName: 'Pgyer' };
+    }
+  },
+}));
+
+vi.mock('./oppo/OppoAdapter.js', () => ({
+  OppoAdapter: class {
+    getCapabilities() {
+      return { storeId: 'oppo', storeName: 'OPPO App Market' };
+    }
+  },
+}));
+
+vi.mock('./honor/HonorAdapter.js', () => ({
+  HonorAdapter: class {
+    getCapabilities() {
+      return { storeId: 'honor', storeName: 'Honor App Gallery' };
+    }
+  },
+}));
+
+vi.mock('./xiaomi/XiaomiAdapter.js', () => ({
+  XiaomiAdapter: class {
+    getCapabilities() {
+      return { storeId: 'xiaomi', storeName: 'Xiaomi GetApps' };
+    }
+  },
+}));
+
+vi.mock('./vivo/VivoAdapter.js', () => ({
+  VivoAdapter: class {
+    getCapabilities() {
+      return { storeId: 'vivo', storeName: 'vivo App Store' };
+    }
+  },
+}));
+
 describe('AdapterRegistry', () => {
   describe('createDefault', () => {
     it('should register google_play, app_store, and huawei_agc adapters', () => {
@@ -37,7 +77,7 @@ describe('AdapterRegistry', () => {
       expect(stores).toContain('google_play');
       expect(stores).toContain('app_store');
       expect(stores).toContain('huawei_agc');
-      expect(stores).toHaveLength(3);
+      expect(stores).toHaveLength(8);
     });
   });
 
@@ -78,7 +118,15 @@ describe('AdapterRegistry', () => {
       const registry = AdapterRegistry.createDefault(authManager);
 
       const stores = registry.getSupportedStores();
-      expect(stores).toEqual(['google_play', 'app_store', 'huawei_agc']);
+      expect(stores).toContain('google_play');
+      expect(stores).toContain('app_store');
+      expect(stores).toContain('huawei_agc');
+      expect(stores).toContain('pgyer');
+      expect(stores).toContain('oppo');
+      expect(stores).toContain('honor');
+      expect(stores).toContain('xiaomi');
+      expect(stores).toContain('vivo');
+      expect(stores).toHaveLength(8);
     });
 
     it('should return empty array for empty registry', () => {
@@ -139,7 +187,7 @@ describe('AdapterRegistry', () => {
       const registry = AdapterRegistry.createDefault(authManager);
 
       const allCaps = registry.getAllCapabilities();
-      expect(allCaps).toHaveLength(3);
+      expect(allCaps).toHaveLength(8);
     });
 
     it('should return empty array for empty registry', () => {

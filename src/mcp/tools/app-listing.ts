@@ -67,16 +67,44 @@ export function registerAppListingTool(server: McpServer): void {
       const registry = await getRegistry();
 
       if (action === 'get') {
-        // Listing read is not yet implemented in adapters — return a placeholder
-        const result = {
-          app_id,
-          store,
-          locale: locale ?? 'en-US',
-          note: 'Listing read API not yet implemented. Use store console to view current listing.',
-        };
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-        };
+        const adapter = registry.getAdapter(store);
+        if (!adapter) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id,
+                store,
+                error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+              }, null, 2),
+            }],
+          };
+        }
+
+        try {
+          const result = await adapter.getListing({ appId: app_id, locale });
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id,
+                store,
+                ...result,
+              }, null, 2),
+            }],
+          };
+        } catch (err) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id,
+                store,
+                error: err instanceof Error ? err.message : String(err),
+              }, null, 2),
+            }],
+          };
+        }
       }
 
       // action === 'update'

@@ -8,12 +8,13 @@
 import { readFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import * as crypto from 'node:crypto';
 import * as jwt from 'jsonwebtoken';
 import axios from 'axios';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
-export type AuthType = 'oauth2' | 'jwt' | 'rsa' | 'apikey';
+export type AuthType = 'oauth2' | 'jwt' | 'rsa' | 'apikey' | 'hmac';
 
 export interface AuthCredentials {
   type: AuthType;
@@ -103,6 +104,12 @@ export class AuthManager {
         // RSA signing doesn't produce a persistent token; each request is signed individually
         // Return an empty marker; the adapter will call signRequest() directly
         token = 'rsa-sign-per-request';
+        expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
+        break;
+      }
+      case 'hmac': {
+        // HMAC signing is per-request; no persistent token needed
+        token = 'hmac-sign-per-request';
         expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000;
         break;
       }
@@ -223,6 +230,36 @@ export class AuthManager {
       token,
       expiresAt: Date.now() + expiresIn * 1000,
     };
+  }
+
+  // ─── RSA Signing (Xiaomi) ───────────────────────────────────────
+
+  signRequest(storeId: string, _method: string, _uri: string, params: Record<string, string>): string {
+    const config = this.credentials.get(storeId)?.config ?? {};
+    const privateKey = config['privateKey'] ?? '';
+    if (!privateKey) {
+      throw new Error(`RSA private key not configured for store: ${storeId}`);
+    }
+
+    const sortedEntries = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+    const signatureString = sortedEntries.map(([k, v]) => `${k}=${v}`).join('&');
+
+    const sign = crypto.createSign('SHA256');
+    sign.update(signatureString);
+    sign.end();
+    return sign.sign(privateKey, 'base64');
+  }
+
+  // ─── HMAC Signing (vivo) ──────────────────────────────────────
+
+  generateHmacSignature(storeId: string, message: string): string {
+    const config = this.credentials.get(storeId)?.config ?? {};
+    const accessSecret = config['accessSecret'] ?? config['access_secret'] ?? '';
+    if (!accessSecret) {
+      throw new Error(`HMAC access secret not configured for store: ${storeId}`);
+    }
+
+    return crypto.createHmac('sha256', accessSecret).update(message).digest('hex');
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────

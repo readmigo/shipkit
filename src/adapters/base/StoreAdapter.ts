@@ -15,7 +15,8 @@ export interface StoreCapabilities {
   supportsRollback: boolean;
   supportsStagedRollout: boolean;
   maxFileSizeMB: number;
-  authMethod: 'oauth2' | 'jwt' | 'rsa' | 'apikey';
+  authMethod: 'oauth2' | 'jwt' | 'rsa' | 'apikey' | 'hmac';
+
   requiresIcp: boolean;
 }
 
@@ -66,6 +67,47 @@ export interface ListingParams {
 }
 
 export interface ListingResult {
+  success: boolean;
+  message?: string;
+}
+
+export interface GetListingParams {
+  appId: string;
+  locale?: string;
+}
+
+export interface GetListingResult {
+  success: boolean;
+  listing?: {
+    title?: string;
+    description?: string;
+    shortDescription?: string;
+    locale?: string;
+  };
+  message?: string;
+}
+
+// ─── Release Management Types ───────────────────────────────────────
+
+export interface PromoteReleaseParams {
+  appId: string;
+  releaseId: string;
+  sourceTrack: string;
+  targetTrack: string;
+}
+
+export interface SetRolloutParams {
+  appId: string;
+  track: string;
+  rolloutPercentage: number;
+}
+
+export interface ResumeReleaseParams {
+  appId: string;
+  track: string;
+}
+
+export interface ReleaseManagementResult {
   success: boolean;
   message?: string;
 }
@@ -140,20 +182,10 @@ export interface RollbackResult {
   message?: string;
 }
 
-// ─── Error Types ─────────────────────────────────────────────────────
+// ─── Error ───────────────────────────────────────────────────────────
 
-export class ShipKitError extends Error {
-  constructor(
-    message: string,
-    public readonly storeId: string,
-    public readonly code: string,
-    public readonly statusCode?: number,
-    public readonly retryable: boolean = false,
-  ) {
-    super(message);
-    this.name = 'ShipKitError';
-  }
-}
+export { ShipKitError } from '../../mcp/errors.js';
+import { ShipKitError } from '../../mcp/errors.js';
 
 // ─── StoreAdapter Interface ──────────────────────────────────────────
 
@@ -163,6 +195,10 @@ export interface StoreAdapter {
   uploadBuild(params: UploadParams): Promise<UploadResult>;
   createRelease(params: ReleaseParams): Promise<ReleaseResult>;
   updateListing(params: ListingParams): Promise<ListingResult>;
+  getListing(params: GetListingParams): Promise<GetListingResult>;
+  promoteRelease(params: PromoteReleaseParams): Promise<ReleaseManagementResult>;
+  setRollout(params: SetRolloutParams): Promise<ReleaseManagementResult>;
+  resumeRelease(params: ResumeReleaseParams): Promise<ReleaseManagementResult>;
   submitForReview(params: SubmitParams): Promise<SubmitResult>;
   getStatus(appId: string): Promise<StatusResult>;
   getAnalytics(params: AnalyticsParams): Promise<AnalyticsResult>;
@@ -187,6 +223,22 @@ export abstract class AbstractStoreAdapter implements StoreAdapter {
   abstract getAnalytics(params: AnalyticsParams): Promise<AnalyticsResult>;
   abstract getReviews(params: ReviewListParams): Promise<ReviewItem[]>;
   abstract rollback(params: RollbackParams): Promise<RollbackResult>;
+
+  async getListing(_params: GetListingParams): Promise<GetListingResult> {
+    return { success: false, message: 'Not implemented' };
+  }
+
+  async promoteRelease(_params: PromoteReleaseParams): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported' };
+  }
+
+  async setRollout(_params: SetRolloutParams): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported' };
+  }
+
+  async resumeRelease(_params: ResumeReleaseParams): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported' };
+  }
 
   /**
    * Retry with exponential backoff

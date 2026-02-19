@@ -6,6 +6,7 @@
  * Docs: https://developer.apple.com/documentation/appstoreconnectapi
  */
 
+import { spawn } from 'node:child_process';
 import axios, { type AxiosInstance } from 'axios';
 import {
   AbstractStoreAdapter,
@@ -17,6 +18,12 @@ import {
   type ReleaseResult,
   type ListingParams,
   type ListingResult,
+  type GetListingParams,
+  type GetListingResult,
+  type PromoteReleaseParams,
+  type SetRolloutParams,
+  type ResumeReleaseParams,
+  type ReleaseManagementResult,
   type SubmitParams,
   type SubmitResult,
   type StatusResult,
@@ -48,7 +55,7 @@ export class AppleAscAdapter extends AbstractStoreAdapter {
       storeId: 'app_store',
       storeName: 'Apple App Store',
       supportedFileTypes: ['ipa'],
-      supportsUpload: false,  // IPA upload requires Transporter CLI
+      supportsUpload: true,
       supportsListing: true,
       supportsReview: true,
       supportsAnalytics: true,
@@ -76,12 +83,74 @@ export class AppleAscAdapter extends AbstractStoreAdapter {
 
   // ─── Upload ────────────────────────────────────────────────────────
 
-  async uploadBuild(_params: UploadParams): Promise<UploadResult> {
-    // IPA upload is not possible via REST API; it requires Transporter CLI or altool
-    return {
-      success: false,
-      message: 'IPA upload requires Transporter CLI. Run: xcrun altool --upload-app -f app.ipa -t ios -u USER -p @keychain:AC_PASSWORD',
-    };
+  async uploadBuild(params: UploadParams): Promise<UploadResult> {
+    if (process.platform !== 'darwin') {
+      return {
+        success: false,
+        message: 'IPA upload requires macOS with Xcode command line tools installed.',
+      };
+    }
+
+    const config = this.authManager.getConfig('app_store');
+    if (!config.keyId || !config.issuerId) {
+      return {
+        success: false,
+        message: 'IPA upload requires keyId and issuerId in Apple credentials config.',
+      };
+    }
+
+    return new Promise<UploadResult>((resolve) => {
+      const args = [
+        'altool',
+        '--upload-app',
+        '-f', params.filePath,
+        '-t', 'ios',
+        '--apiKey', config.keyId,
+        '--apiIssuer', config.issuerId,
+      ];
+
+      const child = spawn('xcrun', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+      const timeout = setTimeout(() => {
+        child.kill('SIGTERM');
+        resolve({
+          success: false,
+          message: 'IPA upload timed out after 10 minutes.',
+        });
+      }, 10 * 60 * 1000);
+
+      child.on('close', (code) => {
+        clearTimeout(timeout);
+
+        if (code === 0 || stdout.includes('No errors uploading')) {
+          resolve({
+            success: true,
+            buildId: params.appId,
+            message: 'IPA uploaded successfully. Build processing on Apple servers may take additional time.',
+          });
+        } else {
+          const errorMsg = stderr.trim() || stdout.trim() || `altool exited with code ${code}`;
+          resolve({
+            success: false,
+            message: `IPA upload failed: ${errorMsg}`,
+          });
+        }
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timeout);
+        resolve({
+          success: false,
+          message: `Failed to spawn xcrun: ${err.message}. Ensure Xcode command line tools are installed.`,
+        });
+      });
+    });
   }
 
   // ─── Release ───────────────────────────────────────────────────────
@@ -205,6 +274,209 @@ export class AppleAscAdapter extends AbstractStoreAdapter {
 
       return { success: true, message: `Listing updated for locale ${params.locale}` };
     }, 'updateListing');
+  }
+
+  // ─── Get Listing ──────────────────────────────────────────────────
+
+  async getListing(params: GetListingParams): Promise<GetListingResult> {
+    return this.withRetry(async () => {
+      const headers = await this.authHeaders();
+
+      // Get the latest app store version (any active state)
+      const versionsResp = await this.client.get<{
+        data: Array<{ id: string; attributes: { appStoreState: string } }>;
+      }>(
+        `/apps/${params.appId}/appStoreVersions`,
+        {
+          headers,
+          params: { limit: 1 },
+        },
+      );
+
+      const version = versionsResp.data.data[0];
+      if (!version) {
+        return { success: false, message: 'No app store version found' };
+      }
+
+      // Get localizations for this version
+      const locResp = await this.client.get<{
+        data: Array<{
+          id: string;
+          attributes: {
+            locale: string;
+            description?: string;
+            keywords?: string;
+            promotionalText?: string;
+          };
+        }>;
+      }>(
+        `/appStoreVersions/${version.id}/appStoreVersionLocalizations`,
+        { headers },
+      );
+
+      const targetLocale = params.locale ?? 'en-US';
+      const localization = locResp.data.data.find(l => l.attributes.locale === targetLocale)
+        ?? locResp.data.data[0];
+
+      if (!localization) {
+        return { success: false, message: `No localization found for locale '${targetLocale}'` };
+      }
+
+      // Get app info for the title (name is on appInfoLocalizations, not version localizations)
+      let title: string | undefined;
+      try {
+        const appInfoResp = await this.client.get<{
+          data: Array<{ id: string }>;
+        }>(
+          `/apps/${params.appId}/appInfos`,
+          { headers, params: { limit: 1 } },
+        );
+        const appInfo = appInfoResp.data.data[0];
+        if (appInfo) {
+          const infoLocResp = await this.client.get<{
+            data: Array<{
+              attributes: { locale: string; name?: string };
+            }>;
+          }>(
+            `/appInfos/${appInfo.id}/appInfoLocalizations`,
+            { headers },
+          );
+          const infoLoc = infoLocResp.data.data.find(l => l.attributes.locale === targetLocale)
+            ?? infoLocResp.data.data[0];
+          title = infoLoc?.attributes.name;
+        }
+      } catch {
+        // title lookup is best-effort
+      }
+
+      return {
+        success: true,
+        listing: {
+          title,
+          description: localization.attributes.description,
+          shortDescription: localization.attributes.promotionalText,
+          locale: localization.attributes.locale,
+        },
+      };
+    }, 'getListing');
+  }
+
+  // ─── Promote Release ──────────────────────────────────────────────
+
+  async promoteRelease(params: PromoteReleaseParams): Promise<ReleaseManagementResult> {
+    // Apple doesn't have track-based promotion; submitting for review is the equivalent
+    const result = await this.submitForReview({ appId: params.appId });
+    return {
+      success: result.success,
+      message: result.message ?? (result.success
+        ? 'Submitted for App Review (Apple equivalent of promotion)'
+        : 'Failed to submit for App Review'),
+    };
+  }
+
+  // ─── Set Rollout ──────────────────────────────────────────────────
+
+  async setRollout(params: SetRolloutParams): Promise<ReleaseManagementResult> {
+    return this.withRetry(async () => {
+      const headers = await this.authHeaders();
+
+      // Get the version with a phased release
+      const versionsResp = await this.client.get<{
+        data: Array<{
+          id: string;
+          relationships: {
+            appStoreVersionPhasedRelease?: { data: { id: string } | null };
+          };
+        }>;
+      }>(
+        `/apps/${params.appId}/appStoreVersions`,
+        {
+          headers,
+          params: { 'filter[appStoreState]': 'PENDING_DEVELOPER_RELEASE,READY_FOR_DISTRIBUTION' },
+        },
+      );
+
+      const version = versionsResp.data.data[0];
+      if (!version) {
+        return { success: false, message: 'No active release found' };
+      }
+
+      const phasedReleaseData = version.relationships.appStoreVersionPhasedRelease?.data;
+      if (!phasedReleaseData) {
+        return { success: false, message: 'No phased release in progress for this version' };
+      }
+
+      // Apple phased release uses currentDayNumber (1-7) to control rollout
+      // Map percentage to approximate day number
+      const dayNumber = Math.max(1, Math.min(7, Math.ceil(params.rolloutPercentage * 7)));
+
+      await this.client.patch(
+        `/appStoreVersionPhasedReleases/${phasedReleaseData.id}`,
+        {
+          data: {
+            type: 'appStoreVersionPhasedReleases',
+            id: phasedReleaseData.id,
+            attributes: { currentDayNumber: dayNumber },
+          },
+        },
+        { headers },
+      );
+
+      return {
+        success: true,
+        message: `Phased release updated to day ${dayNumber} of 7`,
+      };
+    }, 'setRollout');
+  }
+
+  // ─── Resume Release ───────────────────────────────────────────────
+
+  async resumeRelease(params: ResumeReleaseParams): Promise<ReleaseManagementResult> {
+    return this.withRetry(async () => {
+      const headers = await this.authHeaders();
+
+      const versionsResp = await this.client.get<{
+        data: Array<{
+          id: string;
+          relationships: {
+            appStoreVersionPhasedRelease?: { data: { id: string } | null };
+          };
+        }>;
+      }>(
+        `/apps/${params.appId}/appStoreVersions`,
+        {
+          headers,
+          params: { 'filter[appStoreState]': 'PENDING_DEVELOPER_RELEASE,READY_FOR_DISTRIBUTION' },
+        },
+      );
+
+      const version = versionsResp.data.data[0];
+      if (!version) {
+        return { success: false, message: 'No active release found' };
+      }
+
+      const phasedReleaseData = version.relationships.appStoreVersionPhasedRelease?.data;
+      if (!phasedReleaseData) {
+        return { success: false, message: 'No phased release found to resume' };
+      }
+
+      await this.client.patch(
+        `/appStoreVersionPhasedReleases/${phasedReleaseData.id}`,
+        {
+          data: {
+            type: 'appStoreVersionPhasedReleases',
+            id: phasedReleaseData.id,
+            attributes: { phasedReleaseState: 'ACTIVE' },
+          },
+        },
+        { headers },
+      );
+
+      return {
+        success: true,
+        message: 'Phased release resumed',
+      };
+    }, 'resumeRelease');
   }
 
   // ─── Submit for Review ─────────────────────────────────────────────

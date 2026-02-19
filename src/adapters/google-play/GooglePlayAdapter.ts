@@ -6,6 +6,7 @@
  * Docs: https://developers.google.com/android-publisher
  */
 
+import fs from 'node:fs';
 import axios, { type AxiosInstance } from 'axios';
 import {
   AbstractStoreAdapter,
@@ -17,6 +18,12 @@ import {
   type ReleaseResult,
   type ListingParams,
   type ListingResult,
+  type GetListingParams,
+  type GetListingResult,
+  type PromoteReleaseParams,
+  type SetRolloutParams,
+  type ResumeReleaseParams,
+  type ReleaseManagementResult,
   type SubmitParams,
   type SubmitResult,
   type StatusResult,
@@ -93,33 +100,67 @@ export class GooglePlayAdapter extends AbstractStoreAdapter {
     );
   }
 
+  private async deleteEdit(packageName: string, editId: string): Promise<void> {
+    const headers = await this.authHeaders();
+    await this.client.delete(
+      `/androidpublisher/v3/applications/${packageName}/edits/${editId}`,
+      { headers },
+    );
+  }
+
   // ─── Upload ────────────────────────────────────────────────────────
 
   async uploadBuild(params: UploadParams): Promise<UploadResult> {
     return this.withRetry(async () => {
+      if (!fs.existsSync(params.filePath)) {
+        throw new ShipKitError(`File not found: ${params.filePath}`, 'google_play', 'UPLOAD_FAILED');
+      }
+
       const editId = await this.insertEdit(params.appId);
       this.currentEditId = editId;
 
       const endpoint = params.fileType === 'aab' ? 'bundles' : 'apks';
       const headers = await this.authHeaders();
+      const fileSize = fs.statSync(params.filePath).size;
 
-      // In production, this would upload the actual binary via multipart
-      // MVP: we send the upload request metadata; actual file streaming is a TODO
-      const resp = await this.client.post<{ versionCode: number }>(
-        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/${endpoint}`,
-        {},  // TODO: attach file via multipart/form-data
+      const initResp = await axios.post(
+        `https://www.googleapis.com/upload/androidpublisher/v3/applications/${params.appId}/edits/${editId}/${endpoint}`,
+        null,
         {
           headers: {
             ...headers,
             'Content-Type': 'application/octet-stream',
+            'X-Upload-Content-Type': 'application/octet-stream',
+            'X-Upload-Content-Length': String(fileSize),
           },
-          params: { uploadType: 'media' },
+          params: { uploadType: 'resumable' },
+          maxRedirects: 0,
+          validateStatus: (status: number) => status === 200,
+        },
+      );
+
+      const sessionUri = initResp.headers['location'];
+      if (!sessionUri) {
+        throw new ShipKitError('No upload session URI returned', 'google_play', 'UPLOAD_FAILED');
+      }
+
+      const fileStream = fs.createReadStream(params.filePath);
+      const resp = await axios.put<{ versionCode: number }>(
+        sessionUri,
+        fileStream,
+        {
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Content-Length': String(fileSize),
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         },
       );
 
       return {
         success: true,
-        buildId: editId,
+        buildId: String(resp.data.versionCode),
         storeRef: String(resp.data.versionCode),
       };
     }, 'uploadBuild');
@@ -194,6 +235,187 @@ export class GooglePlayAdapter extends AbstractStoreAdapter {
     }, 'updateListing');
   }
 
+  // ─── Get Listing ─────────────────────────────────────────────────
+
+  async getListing(params: GetListingParams): Promise<GetListingResult> {
+    return this.withRetry(async () => {
+      const editId = await this.insertEdit(params.appId);
+      const headers = await this.authHeaders();
+      const locale = params.locale ?? 'en-US';
+
+      try {
+        const resp = await this.client.get<{
+          language: string;
+          title?: string;
+          fullDescription?: string;
+          shortDescription?: string;
+        }>(
+          `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/listings/${locale}`,
+          { headers },
+        );
+
+        await this.deleteEdit(params.appId, editId);
+
+        return {
+          success: true,
+          listing: {
+            title: resp.data.title,
+            description: resp.data.fullDescription,
+            shortDescription: resp.data.shortDescription,
+            locale: resp.data.language,
+          },
+        };
+      } catch (err) {
+        await this.deleteEdit(params.appId, editId).catch(() => {});
+        throw err;
+      }
+    }, 'getListing');
+  }
+
+  // ─── Promote Release ──────────────────────────────────────────────
+
+  async promoteRelease(params: PromoteReleaseParams): Promise<ReleaseManagementResult> {
+    return this.withRetry(async () => {
+      const editId = await this.insertEdit(params.appId);
+      const headers = await this.authHeaders();
+
+      // Get releases from source track
+      const sourceResp = await this.client.get<{
+        track: string;
+        releases: Array<{
+          name?: string;
+          versionCodes?: string[];
+          status: string;
+          releaseNotes?: Array<{ language: string; text: string }>;
+        }>;
+      }>(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.sourceTrack}`,
+        { headers },
+      );
+
+      const sourceRelease = sourceResp.data.releases?.[0];
+      if (!sourceRelease) {
+        await this.deleteEdit(params.appId, editId).catch(() => {});
+        return { success: false, message: `No release found on track '${params.sourceTrack}'` };
+      }
+
+      // Put release onto target track
+      await this.client.put(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.targetTrack}`,
+        {
+          track: params.targetTrack,
+          releases: [{
+            name: sourceRelease.name,
+            versionCodes: sourceRelease.versionCodes,
+            status: 'completed',
+            releaseNotes: sourceRelease.releaseNotes,
+          }],
+        },
+        { headers },
+      );
+
+      await this.commitEdit(params.appId, editId);
+
+      return {
+        success: true,
+        message: `Release promoted from '${params.sourceTrack}' to '${params.targetTrack}'`,
+      };
+    }, 'promoteRelease');
+  }
+
+  // ─── Set Rollout ──────────────────────────────────────────────────
+
+  async setRollout(params: SetRolloutParams): Promise<ReleaseManagementResult> {
+    return this.withRetry(async () => {
+      const editId = await this.insertEdit(params.appId);
+      const headers = await this.authHeaders();
+
+      const trackResp = await this.client.get<{
+        track: string;
+        releases: Array<{
+          name?: string;
+          versionCodes?: string[];
+          status: string;
+          userFraction?: number;
+          releaseNotes?: Array<{ language: string; text: string }>;
+        }>;
+      }>(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.track}`,
+        { headers },
+      );
+
+      const release = trackResp.data.releases?.find(r => r.status === 'inProgress');
+      if (!release) {
+        await this.deleteEdit(params.appId, editId).catch(() => {});
+        return { success: false, message: `No in-progress release found on track '${params.track}'` };
+      }
+
+      release.userFraction = params.rolloutPercentage;
+
+      await this.client.put(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.track}`,
+        {
+          track: params.track,
+          releases: [release],
+        },
+        { headers },
+      );
+
+      await this.commitEdit(params.appId, editId);
+
+      return {
+        success: true,
+        message: `Rollout updated to ${(params.rolloutPercentage * 100).toFixed(1)}% on track '${params.track}'`,
+      };
+    }, 'setRollout');
+  }
+
+  // ─── Resume Release ───────────────────────────────────────────────
+
+  async resumeRelease(params: ResumeReleaseParams): Promise<ReleaseManagementResult> {
+    return this.withRetry(async () => {
+      const editId = await this.insertEdit(params.appId);
+      const headers = await this.authHeaders();
+
+      const trackResp = await this.client.get<{
+        track: string;
+        releases: Array<{
+          name?: string;
+          versionCodes?: string[];
+          status: string;
+          releaseNotes?: Array<{ language: string; text: string }>;
+        }>;
+      }>(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.track}`,
+        { headers },
+      );
+
+      const release = trackResp.data.releases?.find(r => r.status === 'halted');
+      if (!release) {
+        await this.deleteEdit(params.appId, editId).catch(() => {});
+        return { success: false, message: `No halted release found on track '${params.track}'` };
+      }
+
+      release.status = 'completed';
+
+      await this.client.put(
+        `/androidpublisher/v3/applications/${params.appId}/edits/${editId}/tracks/${params.track}`,
+        {
+          track: params.track,
+          releases: [release],
+        },
+        { headers },
+      );
+
+      await this.commitEdit(params.appId, editId);
+
+      return {
+        success: true,
+        message: `Halted release resumed on track '${params.track}'`,
+      };
+    }, 'resumeRelease');
+  }
+
   // ─── Submit for Review ─────────────────────────────────────────────
 
   async submitForReview(params: SubmitParams): Promise<SubmitResult> {
@@ -224,10 +446,7 @@ export class GooglePlayAdapter extends AbstractStoreAdapter {
       );
 
       // Clean up the edit (we were just reading)
-      await this.client.delete(
-        `/androidpublisher/v3/applications/${appId}/edits/${editId}`,
-        { headers },
-      );
+      await this.deleteEdit(appId, editId);
 
       const latestRelease = resp.data.releases?.[0];
 

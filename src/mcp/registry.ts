@@ -3,7 +3,7 @@
  * Auto-loads credentials from ~/.shipkit/credentials/ for all connected stores.
  */
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -19,12 +19,26 @@ interface StoreMetadata {
 }
 
 let _registry: AdapterRegistry | null = null;
+let _credentialsMtime: number = 0;
 
 export function invalidateRegistry(): void {
   _registry = null;
 }
 
 export async function getRegistry(): Promise<AdapterRegistry> {
+  // Check if credentials directory has been modified since last build
+  if (_registry) {
+    try {
+      const stat = statSync(CREDENTIALS_DIR);
+      const mtime = stat.mtimeMs;
+      if (mtime > _credentialsMtime) {
+        _registry = null;
+      }
+    } catch {
+      // Directory doesn't exist yet — keep cached registry
+    }
+  }
+
   if (_registry) return _registry;
 
   const authManager = new AuthManager();
@@ -48,6 +62,14 @@ export async function getRegistry(): Promise<AdapterRegistry> {
   }
 
   _registry = AdapterRegistry.createDefault(authManager);
+
+  // Record credentials mtime so we can detect external changes
+  try {
+    _credentialsMtime = statSync(CREDENTIALS_DIR).mtimeMs;
+  } catch {
+    _credentialsMtime = 0;
+  }
+
   return _registry;
 }
 

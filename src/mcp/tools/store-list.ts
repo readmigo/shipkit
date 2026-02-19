@@ -3,16 +3,29 @@
  */
 
 import { z } from 'zod';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { Store } from '../../types/index.js';
+import type { AuthStatus } from '../../types/index.js';
 
-const KNOWN_STORES: Store[] = [
+const CREDENTIALS_DIR = join(homedir(), '.shipkit', 'credentials');
+
+interface StoreMetadata {
+  store_id: string;
+  name: string;
+  platform: string;
+  region: string;
+  supported_file_types: string[];
+  features: string[];
+}
+
+const KNOWN_STORES: StoreMetadata[] = [
   {
     store_id: 'google_play',
     name: 'Google Play',
     platform: 'android',
     region: 'global',
-    status: 'not_configured',
     supported_file_types: ['aab', 'apk'],
     features: ['staged_rollout', 'multiple_tracks', 'review_required', 'listing_api'],
   },
@@ -21,7 +34,6 @@ const KNOWN_STORES: Store[] = [
     name: 'Apple App Store',
     platform: 'ios',
     region: 'global',
-    status: 'not_configured',
     supported_file_types: ['ipa'],
     features: ['staged_rollout', 'review_required', 'listing_api', 'testflight'],
   },
@@ -30,7 +42,6 @@ const KNOWN_STORES: Store[] = [
     name: 'Huawei AppGallery',
     platform: 'android',
     region: 'all',
-    status: 'not_configured',
     supported_file_types: ['apk', 'aab'],
     features: ['staged_rollout', 'multiple_tracks', 'review_required', 'listing_api'],
   },
@@ -39,7 +50,6 @@ const KNOWN_STORES: Store[] = [
     name: 'Xiaomi GetApps',
     platform: 'android',
     region: 'china',
-    status: 'not_configured',
     supported_file_types: ['apk'],
     features: ['review_required', 'icp_required'],
   },
@@ -48,7 +58,6 @@ const KNOWN_STORES: Store[] = [
     name: 'OPPO App Market',
     platform: 'android',
     region: 'china',
-    status: 'not_configured',
     supported_file_types: ['apk'],
     features: ['review_required', 'icp_required'],
   },
@@ -57,7 +66,6 @@ const KNOWN_STORES: Store[] = [
     name: 'vivo App Store',
     platform: 'android',
     region: 'china',
-    status: 'not_configured',
     supported_file_types: ['apk'],
     features: ['review_required', 'icp_required'],
   },
@@ -66,7 +74,6 @@ const KNOWN_STORES: Store[] = [
     name: 'Honor App Market',
     platform: 'android',
     region: 'china',
-    status: 'not_configured',
     supported_file_types: ['apk'],
     features: ['review_required', 'icp_required'],
   },
@@ -75,11 +82,21 @@ const KNOWN_STORES: Store[] = [
     name: 'Pgyer (蒲公英)',
     platform: 'android',
     region: 'china',
-    status: 'not_configured',
     supported_file_types: ['apk', 'ipa'],
     features: ['no_review'],
   },
 ];
+
+function getAuthStatus(storeId: string): AuthStatus {
+  const metaPath = join(CREDENTIALS_DIR, `${storeId}.json`);
+  const credPath = join(CREDENTIALS_DIR, `${storeId}.credentials`);
+
+  if (!existsSync(metaPath) || !existsSync(credPath)) {
+    return 'not_configured';
+  }
+
+  return 'connected';
+}
 
 export function registerStoreListTool(server: McpServer): void {
   server.registerTool(
@@ -113,7 +130,7 @@ export function registerStoreListTool(server: McpServer): void {
         name: s.name,
         platform: s.platform,
         region: s.region,
-        auth_status: s.status,
+        auth_status: getAuthStatus(s.store_id),
         supported_file_types: s.supported_file_types,
         features: s.features,
       }));

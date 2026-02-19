@@ -6,6 +6,8 @@
  * Docs: https://developer.huawei.com/consumer/en/doc/harmonyos-references/appgallery-connect-api
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import axios, { type AxiosInstance } from 'axios';
 import {
   AbstractStoreAdapter,
@@ -17,6 +19,9 @@ import {
   type ReleaseResult,
   type ListingParams,
   type ListingResult,
+  type GetListingParams,
+  type GetListingResult,
+  type ReleaseManagementResult,
   type SubmitParams,
   type SubmitResult,
   type StatusResult,
@@ -115,16 +120,39 @@ export class HuaweiAgcAdapter extends AbstractStoreAdapter {
       }
 
       // Step 2: Upload file to the provided URL
-      // In production, this would stream the file via multipart/form-data
-      // MVP: we call the upload endpoint but don't attach actual binary data
       const uploadUrl = urlResp.data.uploadUrl;
       const authCode = urlResp.data.authCode;
 
-      // TODO: Implement actual file upload via multipart/form-data
-      // const fileStream = createReadStream(params.filePath);
-      // await axios.post(uploadUrl, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const fileBuffer = fs.readFileSync(params.filePath);
+      const fileName = path.basename(params.filePath);
+      const formData = new FormData();
+      formData.append('file', new Blob([fileBuffer]), fileName);
+      formData.append('authCode', authCode);
+      formData.append('fileCount', '1');
 
-      // Step 3: Update app file info
+      const uploadResp = await axios.post<{
+        result: {
+          UploadFileRsp: {
+            ifSuccess: number;
+            fileInfoList: Array<{ fileDestURI: string }>;
+          };
+        };
+      }>(uploadUrl, formData);
+
+      const uploadResult = uploadResp.data?.result?.UploadFileRsp;
+      if (!uploadResult || uploadResult.ifSuccess !== 0 || !uploadResult.fileInfoList?.[0]?.fileDestURI) {
+        throw new ShipKitError(
+          'File upload to Huawei storage failed',
+          'huawei_agc',
+          'FILE_UPLOAD_FAILED',
+          undefined,
+          true,
+        );
+      }
+
+      const fileDestURI = uploadResult.fileInfoList[0].fileDestURI;
+
+      // Step 3: Update app file info with the uploaded file destination
       const fileInfoResp = await this.client.put<{
         ret: { code: number; msg: string };
       }>(
@@ -132,8 +160,8 @@ export class HuaweiAgcAdapter extends AbstractStoreAdapter {
         {
           fileType: suffix === 'hap' ? 5 : (suffix === 'aab' ? 3 : 1),
           files: [{
-            fileName: `app.${suffix}`,
-            fileDestUrl: uploadUrl,
+            fileName,
+            fileDestUrl: fileDestURI,
           }],
         },
         {
@@ -236,6 +264,66 @@ export class HuaweiAgcAdapter extends AbstractStoreAdapter {
 
       return { success: true, message: `Listing updated for locale ${params.locale}` };
     }, 'updateListing');
+  }
+
+  // ─── Get Listing ──────────────────────────────────────────────────
+
+  async getListing(params: GetListingParams): Promise<GetListingResult> {
+    return this.withRetry(async () => {
+      const headers = await this.authHeaders();
+      const locale = params.locale ?? 'zh-CN';
+
+      const resp = await this.client.get<{
+        ret: { code: number; msg: string };
+        languages: Array<{
+          lang: string;
+          appName?: string;
+          appDesc?: string;
+          briefInfo?: string;
+        }>;
+      }>(
+        '/publish/v2/app-language-info',
+        {
+          headers,
+          params: { appId: params.appId },
+        },
+      );
+
+      if (resp.data.ret.code !== 0) {
+        return { success: false, message: `Failed to get listing: ${resp.data.ret.msg}` };
+      }
+
+      const langInfo = resp.data.languages?.find(l => l.lang === locale)
+        ?? resp.data.languages?.[0];
+
+      if (!langInfo) {
+        return { success: false, message: `No listing found for locale '${locale}'` };
+      }
+
+      return {
+        success: true,
+        listing: {
+          title: langInfo.appName,
+          description: langInfo.appDesc,
+          shortDescription: langInfo.briefInfo,
+          locale: langInfo.lang,
+        },
+      };
+    }, 'getListing');
+  }
+
+  // ─── Promote / Set Rollout / Resume (not supported) ───────────────
+
+  async promoteRelease(): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported via Huawei API' };
+  }
+
+  async setRollout(): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported via Huawei API' };
+  }
+
+  async resumeRelease(): Promise<ReleaseManagementResult> {
+    return { success: false, message: 'Not supported via Huawei API' };
   }
 
   // ─── Submit for Review ─────────────────────────────────────────────

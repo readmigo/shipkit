@@ -118,21 +118,44 @@ export function registerAppReleaseTool(server: McpServer): void {
             severity: 'blocking',
           }));
         }
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              app_id,
-              store,
-              action_result: {
-                action: 'promote',
-                release_id,
-                target_track,
-                note: 'Track promotion submitted. Check store console to confirm.',
-              },
-            }, null, 2),
-          }],
-        };
+        if (!adapter) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+              }, null, 2),
+            }],
+          };
+        }
+        try {
+          const result = await adapter.promoteRelease({
+            appId: app_id,
+            releaseId: release_id,
+            sourceTrack: 'beta',
+            targetTrack: target_track,
+          });
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                action_result: { action: 'promote', release_id, target_track, ...result },
+              }, null, 2),
+            }],
+          };
+        } catch (err) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                action_result: { action: 'promote', success: false, error: err instanceof Error ? err.message : String(err) },
+              }, null, 2),
+            }],
+          };
+        }
       }
 
       if (action === 'set_rollout') {
@@ -144,20 +167,43 @@ export function registerAppReleaseTool(server: McpServer): void {
             severity: 'blocking',
           }));
         }
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              app_id,
-              store,
-              action_result: {
-                action: 'set_rollout',
-                rollout_percentage,
-                note: 'Rollout percentage submitted. Check store console to confirm.',
-              },
-            }, null, 2),
-          }],
-        };
+        if (!adapter) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+              }, null, 2),
+            }],
+          };
+        }
+        try {
+          const result = await adapter.setRollout({
+            appId: app_id,
+            track: target_track ?? 'production',
+            rolloutPercentage: rollout_percentage,
+          });
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                action_result: { action: 'set_rollout', rollout_percentage, ...result },
+              }, null, 2),
+            }],
+          };
+        } catch (err) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                action_result: { action: 'set_rollout', success: false, error: err instanceof Error ? err.message : String(err) },
+              }, null, 2),
+            }],
+          };
+        }
       }
 
       if (action === 'halt' || action === 'resume') {
@@ -170,51 +216,56 @@ export function registerAppReleaseTool(server: McpServer): void {
           }));
         }
 
-        if (adapter) {
-          try {
-            if (action === 'halt') {
-              const result = await adapter.rollback({ appId: app_id });
-              return {
-                content: [{
-                  type: 'text' as const,
-                  text: JSON.stringify({
-                    app_id, store,
-                    action_result: { action: 'halt', success: result.success, message: result.message },
-                  }, null, 2),
-                }],
-              };
-            }
-          } catch (err) {
+        if (!adapter) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                error: `Store '${store}' not configured. Use store.connect to add credentials.`,
+              }, null, 2),
+            }],
+          };
+        }
+
+        try {
+          if (action === 'halt') {
+            const result = await adapter.rollback({ appId: app_id });
             return {
               content: [{
                 type: 'text' as const,
                 text: JSON.stringify({
                   app_id, store,
-                  action_result: { action, success: false, error: err instanceof Error ? err.message : String(err) },
+                  action_result: { action: 'halt', ...result },
+                }, null, 2),
+              }],
+            };
+          } else {
+            const result = await adapter.resumeRelease({
+              appId: app_id,
+              track: target_track ?? 'production',
+            });
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  app_id, store,
+                  action_result: { action: 'resume', ...result },
                 }, null, 2),
               }],
             };
           }
+        } catch (err) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                app_id, store,
+                action_result: { action, success: false, error: err instanceof Error ? err.message : String(err) },
+              }, null, 2),
+            }],
+          };
         }
-
-        // resume or no adapter
-        const prevState = action === 'halt' ? 'released' : 'halted';
-        const currState = action === 'halt' ? 'halted' : 'released';
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              app_id, store,
-              action_result: {
-                action,
-                success: !!adapter,
-                previous_state: prevState,
-                current_state: currState,
-                note: adapter ? undefined : `Store '${store}' not configured. Use store.connect to add credentials.`,
-              },
-            }, null, 2),
-          }],
-        };
       }
 
       return {
