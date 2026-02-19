@@ -17,6 +17,8 @@ import { createPublishRouter } from './api/publish.js';
 import { createStatusRouter } from './api/status.js';
 import { createJobsRouter } from './api/jobs.js';
 import { createComplianceRouter } from './api/compliance.js';
+import { createBillingRouter } from './api/billing.js';
+import { createAnalyticsRouter } from './api/analytics.js';
 
 export function createApp() {
   const app = new Hono();
@@ -35,6 +37,8 @@ export function createApp() {
   app.route('/api/status', createStatusRouter(registry));
   app.route('/api/jobs', createJobsRouter());
   app.route('/api/compliance', createComplianceRouter(registry));
+  app.route('/api/billing', createBillingRouter());
+  app.route('/api/analytics', createAnalyticsRouter());
 
   // Health check
   app.get('/api/health', (c) => {

@@ -1,0 +1,19 @@
+name: shipkit
+description: Unified app publishing MCP Server for Google Play, Apple App Store, and 10+ Chinese Android stores
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      SHIPKIT_API_KEY:
+        type: string
+        description: "ShipKit API key for authentication"
+    required: []
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['@nicetool/shipkit-mcp'],
+      env: {
+        SHIPKIT_API_KEY: config.SHIPKIT_API_KEY || ''
+      }
+    })

@@ -6,6 +6,7 @@
   <title>ShipKit — App Publishing Dashboard</title>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style type="text/tailwindcss">
     [x-cloak] { display: none !important; }
     .sidebar-item { @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150; }
@@ -84,6 +85,10 @@
           <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
           Jobs
         </button>
+        <button @click="currentView = 'analytics'; loadAnalytics()" :class="currentView === 'analytics' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          Analytics
+        </button>
       </nav>
 
       <!-- Sidebar Footer -->
@@ -132,6 +137,10 @@
         <button @click="currentView = 'jobs'; mobileSidebar = false" :class="currentView === 'jobs' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
           <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
           Jobs
+        </button>
+        <button @click="currentView = 'analytics'; loadAnalytics(); mobileSidebar = false" :class="currentView === 'analytics' ? 'active' : 'text-gray-400'" class="sidebar-item w-full">
+          <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          Analytics
         </button>
       </nav>
     </aside>
@@ -717,6 +726,143 @@
             </template>
           </div>
         </div>
+
+        <!-- ==================== ANALYTICS VIEW ==================== -->
+        <div x-show="currentView === 'analytics'">
+
+          <!-- Header row -->
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">Analytics Dashboard</h3>
+            <button @click="loadAnalytics()" class="btn-secondary text-sm">
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              Refresh
+            </button>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="card text-center">
+              <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Total Calls</p>
+              <p class="text-2xl font-bold text-gray-900" x-text="analytics.overview.totalCalls?.toLocaleString() ?? '—'"></p>
+              <p class="text-xs text-gray-400 mt-1">last 30 days</p>
+            </div>
+            <div class="card text-center">
+              <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Success Rate</p>
+              <p class="text-2xl font-bold text-green-600" x-text="(analytics.overview.uptimePercent ?? '—') + '%'"></p>
+              <p class="text-xs text-gray-400 mt-1">last 30 days</p>
+            </div>
+            <div class="card text-center">
+              <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">MAU</p>
+              <p class="text-2xl font-bold text-indigo-600" x-text="analytics.overview.mau ?? '—'"></p>
+              <p class="text-xs text-gray-400 mt-1">active users</p>
+            </div>
+            <div class="card text-center">
+              <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Publishes</p>
+              <p class="text-2xl font-bold text-purple-600" x-text="analytics.overview.totalPublishes?.toLocaleString() ?? '—'"></p>
+              <p class="text-xs text-gray-400 mt-1">last 30 days</p>
+            </div>
+          </div>
+
+          <!-- Charts Row 1: Trend + Store Distribution -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="card">
+              <h4 class="font-semibold text-gray-900 mb-4">30-Day Call Trend</h4>
+              <div class="relative" style="height: 220px">
+                <canvas id="trendChart"></canvas>
+                <template x-if="analytics.trends.length === 0">
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <p class="text-sm text-gray-400">No trend data yet</p>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="font-semibold text-gray-900 mb-4">Store Distribution</h4>
+              <div class="relative" style="height: 220px">
+                <canvas id="storeChart"></canvas>
+                <template x-if="analytics.stores.length === 0">
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <p class="text-sm text-gray-400">No store data yet</p>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Row 2: Tool Ranking + My Quota -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card">
+              <h4 class="font-semibold text-gray-900 mb-4">Tool Usage Ranking</h4>
+              <div class="relative" style="height: 220px">
+                <canvas id="toolChart"></canvas>
+                <template x-if="analytics.tools.length === 0">
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <p class="text-sm text-gray-400">No tool usage data yet</p>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div class="card">
+              <h4 class="font-semibold text-gray-900 mb-4">My Quota</h4>
+              <template x-if="!analytics.quota">
+                <div class="flex items-center justify-center h-40">
+                  <div class="text-center">
+                    <p class="text-sm text-gray-400 mb-2">Enter your API Key ID to view quota</p>
+                    <input type="text" x-model="analytics.quotaApiKeyId" class="input text-xs" placeholder="key_xxxxxxxxxxxxxxxx" @keydown.enter="loadQuota()">
+                    <button @click="loadQuota()" class="btn-primary mt-2 text-xs">Load</button>
+                  </div>
+                </div>
+              </template>
+              <template x-if="analytics.quota">
+                <div class="space-y-5">
+                  <!-- Plan badge -->
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-500">Plan</span>
+                    <span class="badge bg-indigo-100 text-indigo-700 capitalize" x-text="analytics.quota.plan"></span>
+                  </div>
+
+                  <!-- Publish quota bar -->
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5">
+                      <span class="text-gray-600 font-medium">Publishes</span>
+                      <span class="text-gray-500" x-text="analytics.quota.publishUsed + ' / ' + (analytics.quota.publishLimit === -1 ? 'unlimited' : analytics.quota.publishLimit)"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                      <div class="bg-indigo-500 h-2.5 rounded-full transition-all duration-500"
+                           :style="'width: ' + (analytics.quota.publishLimit === -1 ? 5 : Math.min(100, Math.round(analytics.quota.publishUsed / analytics.quota.publishLimit * 100))) + '%'"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1"
+                       x-text="analytics.quota.publishLimit === -1 ? 'Unlimited' : Math.round(analytics.quota.publishUsed / analytics.quota.publishLimit * 100) + '% used'"></p>
+                  </div>
+
+                  <!-- API calls quota bar -->
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5">
+                      <span class="text-gray-600 font-medium">API Calls</span>
+                      <span class="text-gray-500" x-text="analytics.quota.callUsed + ' / ' + (analytics.quota.callLimit === -1 ? 'unlimited' : analytics.quota.callLimit.toLocaleString())"></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                      <div class="bg-purple-500 h-2.5 rounded-full transition-all duration-500"
+                           :style="'width: ' + (analytics.quota.callLimit === -1 ? 5 : Math.min(100, Math.round(analytics.quota.callUsed / analytics.quota.callLimit * 100))) + '%'"></div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1"
+                       x-text="analytics.quota.callLimit === -1 ? 'Unlimited' : Math.round(analytics.quota.callUsed / analytics.quota.callLimit * 100) + '% used'"></p>
+                  </div>
+
+                  <!-- Reset date -->
+                  <div class="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-100">
+                    <span>Resets at</span>
+                    <span x-text="analytics.quota.resetAt ? new Date(analytics.quota.resetAt).toLocaleDateString() : '—'"></span>
+                  </div>
+
+                  <!-- Change key link -->
+                  <button @click="analytics.quota = null; analytics.quotaApiKeyId = ''" class="text-xs text-indigo-500 hover:text-indigo-700">Change API Key</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
       </main>
     </div>
   </div>

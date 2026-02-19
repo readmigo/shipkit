@@ -9,3 +9,4 @@ dist/
 .shipkit/
 *.log
 .DS_Store
+.claude/

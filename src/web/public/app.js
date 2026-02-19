@@ -19,6 +19,16 @@ function app() {
     configModal: { open: false, storeId: '', credentials: {} },
     eventSource: null,
     _jobInterval: null,
+    _quotaInterval: null,
+    _charts: {},
+    analytics: {
+      overview: {},
+      tools: [],
+      stores: [],
+      trends: [],
+      quota: null,
+      quotaApiKeyId: '',
+    },
 
     init() {
       this.fetchStores();
@@ -30,12 +40,18 @@ function app() {
           this.eventSource.close();
           this.eventSource = null;
         }
+        if (newView !== 'analytics' && this._quotaInterval) {
+          clearInterval(this._quotaInterval);
+          this._quotaInterval = null;
+        }
       });
     },
 
     destroy() {
       if (this._jobInterval) clearInterval(this._jobInterval);
+      if (this._quotaInterval) clearInterval(this._quotaInterval);
       if (this.eventSource) this.eventSource.close();
+      Object.values(this._charts).forEach(ch => ch.destroy());
     },
 
     // ==================== API Methods ====================
