@@ -12,6 +12,7 @@
 import { getApiKeyManager } from '../../auth/ApiKeyManager.js';
 import { getQuotaManager } from '../../analytics/QuotaManager.js';
 import { getUsageRecorder } from '../../analytics/UsageRecorder.js';
+import { getClientInfo } from '../clientContext.js';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ export function withApiKey<T extends { _apiKey?: string }>(
           toolName,
           status: 'success',
           durationMs: Date.now() - start,
+          clientInfo: getClientInfo(),
         });
         return response;
       } catch (err) {
@@ -69,6 +71,7 @@ export function withApiKey<T extends { _apiKey?: string }>(
           status: 'failed',
           durationMs: Date.now() - start,
           errorMessage: err instanceof Error ? err.message : String(err),
+          clientInfo: getClientInfo(),
         });
         throw err;
       }
@@ -106,6 +109,7 @@ export function withApiKey<T extends { _apiKey?: string }>(
         toolName,
         status: 'success',
         durationMs: Date.now() - start,
+        clientInfo: getClientInfo(),
       });
       return response;
     } catch (err) {
@@ -115,6 +119,7 @@ export function withApiKey<T extends { _apiKey?: string }>(
         status: 'failed',
         durationMs: Date.now() - start,
         errorMessage: err instanceof Error ? err.message : String(err),
+        clientInfo: getClientInfo(),
       });
       throw err;
     }

@@ -27,6 +27,9 @@ import { registerComplianceCheckTool } from './tools/compliance-check.js';
 // Resources
 import { registerAppStatusResource } from './resources/app-status-resource.js';
 
+// Client context
+import { setClientInfoProvider } from './clientContext.js';
+
 export function createMcpServer(): McpServer {
   // Initialise commercialisation singletons. When SHIPKIT_API_KEY is set,
   // the managers are ready to validate and record usage from the first call.
@@ -67,5 +70,17 @@ export function createMcpServer(): McpServer {
 export async function startMcpServer(): Promise<void> {
   const server = createMcpServer();
   const transport = new StdioServerTransport();
+
+  // After connection the MCP handshake provides client info.
+  // Register a provider so middleware can read it on every tool call.
+  setClientInfoProvider(() => {
+    const cv = server.server.getClientVersion();
+    return {
+      clientName: cv?.name,
+      clientVersion: cv?.version,
+      transportType: 'stdio',
+    };
+  });
+
   await server.connect(transport);
 }
