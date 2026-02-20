@@ -38,8 +38,10 @@ And ShipKit handles the complexity: authentication, build artifact uploads, meta
 | Huawei AppGallery | Android | Global/China | OAuth 2.0 | APK/AAB | ✅ Available |
 | Xiaomi Store | Android | China | RSA Signature | APK/AAB | ✅ Available |
 | OPPO Store | Android | China | OAuth Token | APK/AAB | ✅ Available |
+| Honor App Market | Android | China | OAuth 2.0 | APK/AAB | ✅ Available |
+| Pgyer (蒲公英) | Android/iOS | China | API Key | APK/IPA | ✅ Available |
 | vivo Store | Android | China | API Key + RPA | APK/AAB | 🚧 In Development |
-| Tencent MyApp | Android | China | API Key + RPA | APK/AAB | 🚧 In Development |
+| Tencent MyApp (应用宝) | Android | China | AppKey + HMAC-MD5 | APK | 🚧 In Development |
 | Samsung Galaxy Store | Android | Global | JWT Service Account | APK/AAB | 📋 Planned |
 | HarmonyOS (鸿蒙) | HarmonyOS | China | OAuth 2.0 (via Huawei) | HAP | 📋 Planned |
 | Meizu Store | Android | China | Custom | APK/AAB | 📋 Planned |
@@ -357,6 +359,8 @@ ShipKit uses a modular adapter pattern to handle vastly different store APIs:
 - [x] Huawei AppGallery adapter (full API support)
 - [x] Xiaomi Store adapter (API support)
 - [x] OPPO Store adapter (API support)
+- [x] Honor App Market adapter (API support)
+- [x] Pgyer adapter (test distribution)
 - [x] MCP Server with 8 core tools
 - [x] CLI tool (shipkit command)
 - [x] Basic compliance checks (ICP, privacy policy)
@@ -411,7 +415,7 @@ ShipKit is designed to be extensible. Here's how to add support for a new store:
 
 5. **Document**: Update this README and add store-specific docs to `docs/stores/`
 
-For detailed adapter development guide, see [CONTRIBUTING.md](./CONTRIBUTING.md).
+For detailed adapter development guide, see the [Contributing section](https://github.com/readmigo/shipkit/issues) or open an issue.
 
 ---
 
@@ -423,11 +427,10 @@ MIT — See [LICENSE](./LICENSE) for details
 
 ## Documentation
 
-- **Full Architecture & Design**: See [docs/](./docs/) directory
-- **MCP Protocol Specification**: [docs/mcp-server-protocol-spec.md](./docs/mcp-server-protocol-spec.md)
-- **Store Adapter Architecture**: [docs/store-adapter-architecture.md](./docs/store-adapter-architecture.md)
-- **API Design & AI Agent Integration**: [docs/ai-agent-api-design.md](./docs/ai-agent-api-design.md)
-- **Deployment & Operations**: [docs/deployment.md](./docs/deployment.md)
+- **Full Architecture & Design**: [docs.readmigo.app/03-architecture/shipkit-design](https://docs.readmigo.app/03-architecture/shipkit-design)
+- **Store Adapter Architecture**: [docs.readmigo.app/03-architecture/store-adapter-architecture](https://docs.readmigo.app/03-architecture/store-adapter-architecture)
+- **MCP Protocol Specification**: [docs.readmigo.app/03-architecture/mcp-server-protocol-spec](https://docs.readmigo.app/03-architecture/mcp-server-protocol-spec)
+- **API Design & AI Agent Integration**: [docs.readmigo.app/03-architecture/ai-agent-api-design](https://docs.readmigo.app/03-architecture/ai-agent-api-design)
 
 ---
 
@@ -435,7 +438,7 @@ MIT — See [LICENSE](./LICENSE) for details
 
 - **Issues & Bug Reports**: [GitHub Issues](https://github.com/readmigo/shipkit/issues)
 - **Discussions & Questions**: [GitHub Discussions](https://github.com/readmigo/shipkit/discussions)
-- **Documentation Site**: https://docs.readmigo.app/
+- **Documentation Site**: [docs.readmigo.app/03-architecture/shipkit-design](https://docs.readmigo.app/03-architecture/shipkit-design)
 
 ---
 
