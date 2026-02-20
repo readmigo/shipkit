@@ -1,5 +1,24 @@
-name: shipkit
-description: Unified app publishing MCP Server for Google Play, Apple App Store, and 10+ Chinese Android stores
+name: readmigo/shipkit
+description: >-
+  AI Agent-friendly unified app publishing MCP Server for Google Play,
+  Apple App Store, Huawei AppGallery, and 10+ Chinese Android stores.
+  Publish apps to multiple stores with a single natural language command.
+icon: https://github.com/readmigo/shipkit/raw/main/assets/icon.png
+homepage: https://github.com/readmigo/shipkit
+repository: https://github.com/readmigo/shipkit
+license: MIT
+keywords:
+  - app-publishing
+  - google-play
+  - apple-app-store
+  - huawei
+  - xiaomi
+  - oppo
+  - china
+  - android
+  - ios
+  - ci-cd
+  - automation
 startCommand:
   type: stdio
   configSchema:
@@ -8,12 +27,16 @@ startCommand:
       SHIPKIT_API_KEY:
         type: string
         description: "ShipKit API key for authentication"
+      SHIPKIT_DB_PATH:
+        type: string
+        description: "Path to SQLite database file (default: ~/.shipkit/jobs.db)"
     required: []
   commandFunction: |-
     (config) => ({
       command: 'npx',
-      args: ['@readmigo/shipkit-mcp'],
+      args: ['-y', '@readmigo/shipkit-mcp'],
       env: {
-        SHIPKIT_API_KEY: config.SHIPKIT_API_KEY || ''
+        SHIPKIT_API_KEY: config.SHIPKIT_API_KEY || '',
+        SHIPKIT_DB_PATH: config.SHIPKIT_DB_PATH || ''
       }
     })
