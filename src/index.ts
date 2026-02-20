@@ -6,6 +6,7 @@
 
 // Re-export public API
 export { createMcpServer, startMcpServer } from './mcp/server.js';
+export { createSandboxServer } from './mcp/sandbox.js';
 export { AdapterRegistry } from './adapters/AdapterRegistry.js';
 export { AuthManager } from './auth/AuthManager.js';
 export { JobQueue, globalQueue } from './queue/JobQueue.js';
