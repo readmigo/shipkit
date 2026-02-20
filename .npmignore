@@ -22,4 +22,7 @@ coverage/
 *.log
 .DS_Store
 smithery.yaml
+server.json
 docs/
+deploy/
+.mcpregistry_*

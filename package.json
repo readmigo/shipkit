@@ -1,6 +1,6 @@
 {
   "name": "@readmigo/shipkit-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI Agent-friendly unified app publishing MCP Server for Google Play, Apple App Store, and 10+ Chinese Android stores",
   "type": "module",
   "main": "./dist/index.js",
