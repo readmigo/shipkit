@@ -2,9 +2,13 @@
  * SQLite database for job persistence.
  *
  * DB path: SHIPKIT_DB_PATH env or ~/.shipkit/jobs.db
+ *
+ * better-sqlite3 is loaded via dynamic import so that esbuild (used by
+ * Smithery CLI) does not attempt to bundle the native addon at build time.
  */
 
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -18,10 +22,13 @@ function dbPath(): string {
 export function getDb(): Database.Database {
   if (_db) return _db;
 
+  const require = createRequire(import.meta.url);
+  const BetterSqlite3 = require('better-sqlite3') as typeof Database;
+
   const p = dbPath();
   mkdirSync(dirname(p), { recursive: true });
 
-  _db = new Database(p);
+  _db = new BetterSqlite3(p);
   _db.pragma('journal_mode = WAL');
 
   _db.exec(`
