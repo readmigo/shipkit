@@ -27,8 +27,9 @@ import { registerComplianceCheckTool } from './tools/compliance-check.js';
 // Resources
 import { registerAppStatusResource } from './resources/app-status-resource.js';
 
-// Client context
+// Client context & analytics
 import { setClientInfoProvider } from './clientContext.js';
+import { getPostHogReporter } from '../analytics/PostHogReporter.js';
 
 export function createMcpServer(): McpServer {
   // Initialise commercialisation singletons. When SHIPKIT_API_KEY is set,
@@ -81,6 +82,10 @@ export async function startMcpServer(): Promise<void> {
       transportType: 'stdio',
     };
   });
+
+  // Start PostHog async reporter (no-op if POSTHOG_API_KEY is unset)
+  const phReporter = getPostHogReporter();
+  phReporter?.start();
 
   await server.connect(transport);
 }

@@ -19,6 +19,7 @@ import { createJobsRouter } from './api/jobs.js';
 import { createComplianceRouter } from './api/compliance.js';
 import { createBillingRouter } from './api/billing.js';
 import { createAnalyticsRouter } from './api/analytics.js';
+import { getPostHogReporter } from '../analytics/PostHogReporter.js';
 
 export function createApp() {
   const app = new Hono();
@@ -66,6 +67,9 @@ export async function startWebServer(port?: number): Promise<void> {
     fetch: app.fetch,
     port: resolvedPort,
   });
+
+  // Start PostHog async reporter (no-op if POSTHOG_API_KEY is unset)
+  getPostHogReporter()?.start();
 
   console.log(`ShipKit Web Dashboard running at http://localhost:${resolvedPort}`);
 }
