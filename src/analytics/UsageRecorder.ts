@@ -13,6 +13,14 @@ const log = createLogger('usage-recorder');
 
 // ─── Types ───────────────────────────────────────────────────────────
 
+export interface ClientInfo {
+  clientName?: string;
+  clientVersion?: string;
+  transportType?: string;
+  ip?: string;
+  country?: string;
+}
+
 export interface UsageEvent {
   apiKeyId?: string;
   toolName: string;
@@ -22,6 +30,13 @@ export interface UsageEvent {
   durationMs: number;
   fileSizeBytes?: number;
   errorMessage?: string;
+  clientInfo?: ClientInfo;
+}
+
+export interface SessionEvent {
+  type: 'session_start' | 'session_end';
+  clientInfo: ClientInfo;
+  sessionDurationMs?: number;
 }
 
 // ─── UsageRecorder ───────────────────────────────────────────────────
@@ -35,11 +50,13 @@ export class UsageRecorder {
       const id = randomUUID();
       const now = new Date().toISOString();
       const db = getDb();
+      const ci = event.clientInfo;
 
       db.prepare(
         `INSERT INTO usage_events
-           (id, api_key_id, tool_name, store_id, app_id, status, duration_ms, file_size_bytes, error_message, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, api_key_id, tool_name, store_id, app_id, status, duration_ms, file_size_bytes, error_message,
+            client_name, client_version, transport_type, ip, country, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         event.apiKeyId ?? null,
@@ -50,11 +67,48 @@ export class UsageRecorder {
         event.durationMs,
         event.fileSizeBytes ?? null,
         event.errorMessage ?? null,
+        ci?.clientName ?? null,
+        ci?.clientVersion ?? null,
+        ci?.transportType ?? null,
+        ci?.ip ?? null,
+        ci?.country ?? null,
         now,
       );
     } catch (err) {
       // Log but swallow — analytics must never crash the caller
       log.warn({ err }, 'usage-recorder: failed to persist event');
+    }
+  }
+
+  /**
+   * Record a session lifecycle event (start/end).
+   */
+  recordSession(event: SessionEvent): void {
+    try {
+      const id = randomUUID();
+      const now = new Date().toISOString();
+      const db = getDb();
+      const ci = event.clientInfo;
+
+      db.prepare(
+        `INSERT INTO usage_events
+           (id, tool_name, status, duration_ms,
+            client_name, client_version, transport_type, ip, country, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        event.type,
+        'success',
+        event.sessionDurationMs ?? 0,
+        ci.clientName ?? null,
+        ci.clientVersion ?? null,
+        ci.transportType ?? null,
+        ci.ip ?? null,
+        ci.country ?? null,
+        now,
+      );
+    } catch (err) {
+      log.warn({ err }, 'usage-recorder: failed to persist session event');
     }
   }
 }

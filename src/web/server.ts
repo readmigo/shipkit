@@ -5,9 +5,10 @@
  * Serves static files from the public directory for the SPA frontend.
  */
 
+import { createServer } from 'node:http';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
+import { getRequestListener } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { AuthManager } from '../auth/AuthManager.js';
 import { AdapterRegistry } from '../adapters/AdapterRegistry.js';
@@ -20,6 +21,7 @@ import { createComplianceRouter } from './api/compliance.js';
 import { createBillingRouter } from './api/billing.js';
 import { createAnalyticsRouter } from './api/analytics.js';
 import { getPostHogReporter } from '../analytics/PostHogReporter.js';
+import { getSessionManager } from '../mcp/httpTransport.js';
 
 export function createApp() {
   const app = new Hono();
@@ -63,15 +65,30 @@ export async function startWebServer(port?: number): Promise<void> {
   const resolvedPort = port ?? parseInt(process.env.SHIPKIT_WEB_PORT || '3456', 10);
   const { app } = createApp();
 
-  serve({
-    fetch: app.fetch,
-    port: resolvedPort,
+  // Convert Hono app to a Node.js request listener
+  const honoListener = getRequestListener(app.fetch);
+
+  // MCP HTTP transport session manager
+  const sessionManager = getSessionManager();
+  sessionManager.start();
+
+  // Create a Node.js HTTP server that routes /mcp to the MCP transport
+  // and all other paths to the Hono app (dashboard + REST API).
+  const httpServer = createServer(async (req, res) => {
+    if (req.url?.startsWith('/mcp')) {
+      await sessionManager.handleRequest(req, res);
+    } else {
+      honoListener(req, res);
+    }
   });
+
+  httpServer.listen(resolvedPort);
 
   // Start PostHog async reporter (no-op if POSTHOG_API_KEY is unset)
   getPostHogReporter()?.start();
 
   console.log(`ShipKit Web Dashboard running at http://localhost:${resolvedPort}`);
+  console.log(`MCP HTTP endpoint available at http://localhost:${resolvedPort}/mcp`);
 }
 
 // Auto-start when executed directly

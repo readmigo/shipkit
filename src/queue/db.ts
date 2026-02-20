@@ -71,6 +71,12 @@ export function getDb(): Database.Database {
       duration_ms      INTEGER,
       file_size_bytes  INTEGER,
       error_message    TEXT,
+      client_name      TEXT,
+      client_version   TEXT,
+      transport_type   TEXT,
+      ip               TEXT,
+      country          TEXT,
+      synced_at        TEXT,
       created_at       TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -87,6 +93,23 @@ export function getDb(): Database.Database {
       PRIMARY KEY (date, tool_name, store_id)
     );
   `);
+
+  // Migrate: add analytics columns to usage_events if missing
+  const cols = _db.prepare("PRAGMA table_info(usage_events)").all() as Array<{ name: string }>;
+  const colNames = new Set(cols.map(c => c.name));
+  const migrations: Array<[string, string]> = [
+    ['client_name', 'TEXT'],
+    ['client_version', 'TEXT'],
+    ['transport_type', 'TEXT'],
+    ['ip', 'TEXT'],
+    ['country', 'TEXT'],
+    ['synced_at', 'TEXT'],
+  ];
+  for (const [col, type] of migrations) {
+    if (!colNames.has(col)) {
+      _db.exec(`ALTER TABLE usage_events ADD COLUMN ${col} ${type}`);
+    }
+  }
 
   return _db;
 }
