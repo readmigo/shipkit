@@ -67,7 +67,7 @@ Add to your MCP configuration file:
   "mcpServers": {
     "shipkit": {
       "command": "npx",
-      "args": ["@readmigo/shipkit-mcp"],
+      "args": ["-y", "@readmigo/shipkit-mcp"],
       "env": {
         "SHIPKIT_API_KEY": "sk-your-api-key-here"
       }
@@ -83,7 +83,7 @@ Add to your MCP configuration file:
   "mcpServers": {
     "shipkit": {
       "command": "npx",
-      "args": ["@readmigo/shipkit-mcp"],
+      "args": ["-y", "@readmigo/shipkit-mcp"],
       "env": {
         "SHIPKIT_API_KEY": "sk-your-api-key-here"
       }
