@@ -23,9 +23,13 @@ import { registerAppListingTool } from './tools/app-listing.js';
 import { registerAppReleaseTool } from './tools/app-release.js';
 import { registerAppPublishTool } from './tools/app-publish.js';
 import { registerComplianceCheckTool } from './tools/compliance-check.js';
+import { registerOnboardingTool } from './tools/onboarding.js';
+import { registerStoreSetupGuideTool } from './tools/store-setup-guide.js';
+import { registerPublishPreflightTool } from './tools/publish-preflight.js';
 
 // Resources
 import { registerAppStatusResource } from './resources/app-status-resource.js';
+import { registerGuideResource } from './resources/guide-resource.js';
 
 // Client context & analytics
 import { setClientInfoProvider } from './clientContext.js';
@@ -61,9 +65,13 @@ export function createMcpServer(): McpServer {
   registerAppReleaseTool(server);
   registerAppPublishTool(server);
   registerComplianceCheckTool(server);
+  registerOnboardingTool(server);
+  registerStoreSetupGuideTool(server);
+  registerPublishPreflightTool(server);
 
   // Register resources
   registerAppStatusResource(server);
+  registerGuideResource(server);
 
   return server;
 }

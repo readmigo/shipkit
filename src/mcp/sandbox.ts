@@ -19,6 +19,10 @@ import { registerAppListingTool } from './tools/app-listing.js';
 import { registerAppReleaseTool } from './tools/app-release.js';
 import { registerAppPublishTool } from './tools/app-publish.js';
 import { registerComplianceCheckTool } from './tools/compliance-check.js';
+import { registerOnboardingTool } from './tools/onboarding.js';
+import { registerStoreSetupGuideTool } from './tools/store-setup-guide.js';
+import { registerPublishPreflightTool } from './tools/publish-preflight.js';
+import { registerGuideResource } from './resources/guide-resource.js';
 
 export function createSandboxServer(): McpServer {
   const server = new McpServer(
@@ -42,6 +46,12 @@ export function createSandboxServer(): McpServer {
   registerAppReleaseTool(server);
   registerAppPublishTool(server);
   registerComplianceCheckTool(server);
+  registerOnboardingTool(server);
+  registerStoreSetupGuideTool(server);
+  registerPublishPreflightTool(server);
+
+  // Guide resource has no SQLite dependency — safe for sandbox
+  registerGuideResource(server);
 
   return server;
 }
