@@ -7,6 +7,8 @@
  * GET /api/analytics/usage       — Personal usage for an API key
  * GET /api/analytics/quota       — Quota status for an API key
  * GET /api/analytics/trends      — N-day call trend data (admin key required)
+ * GET /api/analytics/clients     — Client name/version distribution (admin key required)
+ * GET /api/analytics/geo         — Geographic distribution by country (admin key required)
  */
 
 import { Hono } from 'hono';
@@ -240,6 +242,64 @@ export function createAnalyticsRouter(): Hono {
     }>;
 
     return c.json({ trends: rows });
+  });
+
+  // GET /api/analytics/clients
+  app.get('/clients', (c) => {
+    const authHeader = c.req.header('Authorization');
+    if (!getAdminKeyId(authHeader)) {
+      return c.json({ error: 'Admin API key required' }, 401);
+    }
+
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(client_name, 'unknown') as clientName,
+        COALESCE(client_version, 'unknown') as clientVersion,
+        COALESCE(transport_type, 'unknown') as transportType,
+        COUNT(*) as totalCalls,
+        COUNT(DISTINCT api_key_id) as uniqueUsers
+      FROM usage_events
+      WHERE created_at >= datetime('now', '-30 days')
+        AND client_name IS NOT NULL
+      GROUP BY client_name, client_version, transport_type
+      ORDER BY totalCalls DESC
+    `).all() as Array<{
+      clientName: string;
+      clientVersion: string;
+      transportType: string;
+      totalCalls: number;
+      uniqueUsers: number;
+    }>;
+
+    return c.json({ clients: rows });
+  });
+
+  // GET /api/analytics/geo
+  app.get('/geo', (c) => {
+    const authHeader = c.req.header('Authorization');
+    if (!getAdminKeyId(authHeader)) {
+      return c.json({ error: 'Admin API key required' }, 401);
+    }
+
+    const db = getDb();
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(country, 'unknown') as country,
+        COUNT(*) as totalCalls,
+        COUNT(DISTINCT api_key_id) as uniqueUsers
+      FROM usage_events
+      WHERE created_at >= datetime('now', '-30 days')
+        AND country IS NOT NULL
+      GROUP BY country
+      ORDER BY totalCalls DESC
+    `).all() as Array<{
+      country: string;
+      totalCalls: number;
+      uniqueUsers: number;
+    }>;
+
+    return c.json({ geo: rows });
   });
 
   return app;

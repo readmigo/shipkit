@@ -25,11 +25,16 @@ function seedEvents(overrides: Partial<{
   storeId: string;
   status: string;
   durationMs: number;
+  clientName: string;
+  clientVersion: string;
+  transportType: string;
+  country: string;
 }>[]) {
   const db = getDb();
   const stmt = db.prepare(`
-    INSERT INTO usage_events (id, api_key_id, tool_name, store_id, status, duration_ms, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, datetime('now', '-' || ? || ' days'))
+    INSERT INTO usage_events (id, api_key_id, tool_name, store_id, status, duration_ms,
+      client_name, client_version, transport_type, country, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-' || ? || ' days'))
   `);
   const insert = db.transaction((rows: typeof overrides) => {
     rows.forEach((r, i) => {
@@ -40,6 +45,10 @@ function seedEvents(overrides: Partial<{
         r.storeId ?? 'google_play',
         r.status ?? 'success',
         r.durationMs ?? 100,
+        r.clientName ?? null,
+        r.clientVersion ?? null,
+        r.transportType ?? null,
+        r.country ?? null,
         0, // today
       );
     });
@@ -325,6 +334,108 @@ describe('Analytics API', () => {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       expect(res.status).toBe(200);
+    });
+  });
+
+  // ── /clients ──────────────────────────────────────────────────────
+
+  describe('GET /api/analytics/clients', () => {
+    it('returns 401 without admin key', async () => {
+      const res = await app.request('/api/analytics/clients');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns client distribution for admin key', async () => {
+      const km = getApiKeyManager();
+      const { apiKey } = km.generateKey('enterprise');
+
+      seedEvents([
+        { clientName: 'claude-code', clientVersion: '1.0.0', transportType: 'stdio' },
+        { clientName: 'claude-code', clientVersion: '1.0.0', transportType: 'stdio' },
+        { clientName: 'cursor', clientVersion: '0.45.0', transportType: 'stdio' },
+      ]);
+
+      const res = await app.request('/api/analytics/clients', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { clients: Array<Record<string, unknown>> };
+      expect(Array.isArray(body.clients)).toBe(true);
+
+      const claude = body.clients.find((c) => c.clientName === 'claude-code');
+      expect(claude).toBeDefined();
+      expect(claude!.totalCalls).toBe(2);
+      expect(claude!.clientVersion).toBe('1.0.0');
+      expect(claude!.transportType).toBe('stdio');
+    });
+
+    it('excludes events without client_name', async () => {
+      const km = getApiKeyManager();
+      const { apiKey } = km.generateKey('enterprise');
+
+      seedEvents([
+        { clientName: 'claude-code', clientVersion: '1.0.0', transportType: 'stdio' },
+        { /* no client info */ },
+      ]);
+
+      const res = await app.request('/api/analytics/clients', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const body = await res.json() as { clients: Array<Record<string, unknown>> };
+      expect(body.clients).toHaveLength(1);
+    });
+  });
+
+  // ── /geo ──────────────────────────────────────────────────────────
+
+  describe('GET /api/analytics/geo', () => {
+    it('returns 401 without admin key', async () => {
+      const res = await app.request('/api/analytics/geo');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns geographic distribution for admin key', async () => {
+      const km = getApiKeyManager();
+      const { apiKey } = km.generateKey('enterprise');
+
+      seedEvents([
+        { country: 'CN', apiKeyId: 'key_cn1' },
+        { country: 'CN', apiKeyId: 'key_cn2' },
+        { country: 'US', apiKeyId: 'key_us1' },
+      ]);
+
+      const res = await app.request('/api/analytics/geo', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as { geo: Array<Record<string, unknown>> };
+      expect(Array.isArray(body.geo)).toBe(true);
+
+      const cn = body.geo.find((g) => g.country === 'CN');
+      expect(cn).toBeDefined();
+      expect(cn!.totalCalls).toBe(2);
+      expect(cn!.uniqueUsers).toBe(2);
+
+      const us = body.geo.find((g) => g.country === 'US');
+      expect(us).toBeDefined();
+      expect(us!.totalCalls).toBe(1);
+    });
+
+    it('excludes events without country', async () => {
+      const km = getApiKeyManager();
+      const { apiKey } = km.generateKey('enterprise');
+
+      seedEvents([
+        { country: 'JP' },
+        { /* no country */ },
+      ]);
+
+      const res = await app.request('/api/analytics/geo', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const body = await res.json() as { geo: Array<Record<string, unknown>> };
+      expect(body.geo).toHaveLength(1);
+      expect(body.geo[0].country).toBe('JP');
     });
   });
 });
