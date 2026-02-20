@@ -91,8 +91,13 @@ export async function startWebServer(port?: number): Promise<void> {
   console.log(`MCP HTTP endpoint available at http://localhost:${resolvedPort}/mcp`);
 }
 
-// Auto-start when executed directly
-const isMain = process.argv[1]?.endsWith('web/server.js') || process.argv[1]?.endsWith('web/server.ts');
+// Auto-start when executed directly (supports both direct invocation and PM2)
+const scriptPath = process.argv[1] ?? '';
+const isMain =
+  scriptPath.endsWith('web/server.js') ||
+  scriptPath.endsWith('web/server.ts') ||
+  import.meta.url.endsWith('web/server.js') ||
+  import.meta.url.endsWith('web/server.ts');
 if (isMain) {
   startWebServer();
 }
