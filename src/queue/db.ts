@@ -22,7 +22,12 @@ function dbPath(): string {
 export function getDb(): Database.Database {
   if (_db) return _db;
 
-  const require = createRequire(import.meta.url);
+  // import.meta.url is undefined in CJS bundles (e.g. Smithery esbuild scan).
+  // Fall back to process.cwd()-based path which createRequire also accepts.
+  const baseUrl = typeof import.meta?.url === 'string' && import.meta.url
+    ? import.meta.url
+    : join(process.cwd(), 'package.json');
+  const require = createRequire(baseUrl);
   const BetterSqlite3 = require('better-sqlite3') as typeof Database;
 
   const p = dbPath();
