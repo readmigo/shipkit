@@ -78,6 +78,7 @@
     "oppo",
     "app-store-connect"
   ],
+  "mcpName": "io.github.readmigo/shipkit",
   "license": "MIT",
   "vitest": {
     "environment": "node",
