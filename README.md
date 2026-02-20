@@ -53,7 +53,7 @@ And ShipKit handles the complexity: authentication, build artifact uploads, meta
 ### Installation for Claude Code
 
 ```bash
-claude mcp add shipkit -- npx @readmigo/shipkit-mcp
+claude mcp add shipkit -- npx -y @readmigo/shipkit-mcp
 ```
 
 ### Installation for Claude Desktop / Cursor / Windsurf
