@@ -94,7 +94,7 @@ describe('McpSessionManager', () => {
       params: {},
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = await res.json() as { error: { message: string } };
     expect(body.error.message).toContain('missing session ID');
   });
 
@@ -179,7 +179,7 @@ describe('McpSessionManager', () => {
       body: '{ invalid json',
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = await res.json() as { error: { code: number } };
     expect(body.error.code).toBe(-32700);
   });
 
